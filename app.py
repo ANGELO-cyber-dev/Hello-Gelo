@@ -262,7 +262,7 @@ HTML_TEMPLATE = """
           <span class="shazam-icon">⚡</span>
         </div>
       </div>
-      <div class="shazam-status" id="shazamStatus">Tap to Shazam</div>
+      <div class="shazam-status" id="shazamStatus">Tap to Search</div>
       <div class="sub-link" onclick="document.getElementById('filePicker').click()">or upload audio file</div>
       <input type="file" id="filePicker" accept="audio/*" onchange="uploadAudio(this.files[0])">
       <div id="resultContainer" style="width: 100%;"></div>
