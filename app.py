@@ -16,7 +16,7 @@ HTML_TEMPLATE = """
   <title>HELLO Gelo</title>
   <style>
     body {
-      background-color: #0d1117;
+      background-color: #0b0f19;
       color: #e6edf3;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       margin: 0;
@@ -27,77 +27,213 @@ HTML_TEMPLATE = """
     }
     .header {
       font-size: 24px;
-      font-weight: bold;
-      color: #58a6ff;
-      margin-bottom: 20px;
+      font-weight: 800;
+      color: #38bdf8;
+      margin: 12px 0 20px 0;
+      letter-spacing: 0.5px;
     }
     .card {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 12px;
-      padding: 16px;
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      padding: 18px;
       width: 100%;
       max-width: 440px;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
       box-sizing: border-box;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
     }
     .card-title {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
       display: flex;
       align-items: center;
       gap: 8px;
     }
     textarea {
       width: 100%;
-      background: #0d1117;
-      border: 1px solid #30363d;
-      color: #e6edf3;
-      padding: 10px;
-      border-radius: 8px;
+      background: #030712;
+      border: 1px solid #374151;
+      color: #f3f4f6;
+      padding: 12px;
+      border-radius: 10px;
       font-size: 14px;
       box-sizing: border-box;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
+      resize: vertical;
     }
     .btn-row {
       display: flex;
       gap: 10px;
-      flex-wrap: wrap;
     }
-    button {
-      background: #1f6feb;
+    button.action-btn {
+      background: #2563eb;
       border: none;
       color: #fff;
-      padding: 10px 14px;
+      padding: 10px 16px;
       border-radius: 8px;
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
+      transition: background 0.2s;
+    }
+    button.action-btn:active {
+      transform: scale(0.98);
     }
     button.btn-green {
-      background: #238636;
-    }
-    button.btn-gray {
-      background: #30363d;
-    }
-    button:disabled {
-      opacity: 0.5;
+      background: #059669;
     }
     .output {
-      margin-top: 12px;
+      margin-top: 14px;
       font-size: 14px;
-      line-height: 1.5;
-      color: #c9d1d9;
+      line-height: 1.6;
+      color: #cbd5e1;
       white-space: pre-wrap;
       word-break: break-word;
-      min-height: 24px;
     }
     .error {
-      color: #f85149;
+      color: #f87171;
+    }
+
+    /* Shazam UI Styling */
+    .shazam-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 0 10px 0;
+    }
+    .pulse-wrapper {
+      position: relative;
+      width: 130px;
+      height: 130px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .shazam-circle {
+      position: relative;
+      z-index: 2;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0088ff, #0051ff);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 0 25px rgba(0, 136, 255, 0.45);
+      user-select: none;
+      transition: transform 0.2s;
+    }
+    .shazam-circle:active {
+      transform: scale(0.94);
+    }
+    .shazam-icon {
+      font-size: 38px;
+      line-height: 1;
+    }
+    .pulse-ring {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 3px solid #0088ff;
+      opacity: 0;
+      pointer-events: none;
+      box-sizing: border-box;
+    }
+    .pulsing .pulse-ring {
+      animation: ripple 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+    }
+    @keyframes ripple {
+      0% {
+        transform: scale(0.7);
+        opacity: 0.9;
+      }
+      100% {
+        transform: scale(1.6);
+        opacity: 0;
+      }
+    }
+    .shazam-status {
+      font-size: 15px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-align: center;
+      min-height: 22px;
+    }
+
+    /* Track Result Card */
+    .track-card {
+      margin-top: 16px;
+      width: 100%;
+      background: #1f2937;
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-sizing: border-box;
+    }
+    .track-cover {
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      background: #374151;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .track-info {
+      flex-grow: 1;
+      overflow: hidden;
+    }
+    .track-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .track-artist {
+      font-size: 14px;
+      color: #94a3b8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+    .track-links {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .track-link-btn {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #fff;
+      background: #0284c7;
+      font-weight: 600;
     }
     #filePicker {
       display: none;
+    }
+    .sub-link {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 10px;
+      cursor: pointer;
+      text-decoration: underline;
     }
   </style>
 </head>
@@ -109,20 +245,28 @@ HTML_TEMPLATE = """
     <div class="card-title">💬 Conversational Brain</div>
     <textarea id="promptInput" rows="3" placeholder="Ask me anything...">Hello Gelo</textarea>
     <div class="btn-row">
-      <button id="askBtn" onclick="askAi()">Ask Gelo</button>
-      <button class="btn-green" onclick="readAloud()">🗣️ Read</button>
+      <button class="action-btn" id="askBtn" onclick="askAi()">Ask Gelo</button>
+      <button class="action-btn btn-green" onclick="readAloud()">🗣️ Read</button>
     </div>
     <div id="aiOutput" class="output"></div>
   </div>
 
   <div class="card">
-    <div class="card-title">🎵 Audio & Media Recognition</div>
-    <div class="btn-row">
-      <button id="micBtn" onclick="recordAudio()">Identify Music (7s)</button>
-      <button class="btn-gray" onclick="document.getElementById('filePicker').click()">Choose Audio File</button>
+    <div class="card-title">🎵 Music Recognition</div>
+    
+    <div class="shazam-container">
+      <div id="pulseWrapper" class="pulse-wrapper">
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring" style="animation-delay: 0.6s;"></div>
+        <div class="shazam-circle" id="shazamBtn" onclick="startShazam()">
+          <span class="shazam-icon">⚡</span>
+        </div>
+      </div>
+      <div class="shazam-status" id="shazamStatus">Tap to Shazam</div>
+      <div class="sub-link" onclick="document.getElementById('filePicker').click()">or upload audio file</div>
+      <input type="file" id="filePicker" accept="audio/*" onchange="uploadAudio(this.files[0])">
+      <div id="resultContainer" style="width: 100%;"></div>
     </div>
-    <input type="file" id="filePicker" accept="audio/*" onchange="uploadAudioFile(this.files[0])">
-    <div id="audioOutput" class="output"></div>
   </div>
 
   <script>
@@ -165,11 +309,39 @@ HTML_TEMPLATE = """
       window.speechSynthesis.speak(utterance);
     }
 
-    async function uploadAudioFile(file) {
+    function renderShazamResult(track) {
+      const container = document.getElementById('resultContainer');
+      const coverUrl = (track.spotify && track.spotify.album && track.spotify.album.images && track.spotify.album.images[0])
+        ? track.spotify.album.images[0].url
+        : (track.apple_music && track.apple_music.artwork)
+          ? track.apple_music.artwork.url.replace('{w}x{h}', '300x300')
+          : 'https://via.placeholder.com/150/1e293b/38bdf8?text=Song';
+
+      const spotifyLink = track.spotify ? track.spotify.external_urls.spotify : null;
+      const appleLink = track.apple_music ? track.apple_music.url : null;
+
+      container.innerHTML = `
+        <div class="track-card">
+          <img class="track-cover" src="${coverUrl}" alt="Album Art">
+          <div class="track-info">
+            <div class="track-title">${track.title}</div>
+            <div class="track-artist">${track.artist}</div>
+            <div class="track-links">
+              ${spotifyLink ? `<a class="track-link-btn" href="${spotifyLink}" target="_blank">Spotify</a>` : ''}
+              ${appleLink ? `<a class="track-link-btn" href="${appleLink}" target="_blank">Apple Music</a>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function uploadAudio(file) {
       if (!file) return;
-      const out = document.getElementById('audioOutput');
-      out.innerText = "Identifying audio via AudD...";
-      out.className = "output";
+      const status = document.getElementById('shazamStatus');
+      const wrapper = document.getElementById('pulseWrapper');
+      status.innerText = "Searching Shazam database...";
+      status.className = "shazam-status";
+      wrapper.classList.remove('pulsing');
 
       const formData = new FormData();
       formData.append('file', file);
@@ -178,27 +350,39 @@ HTML_TEMPLATE = """
         const res = await fetch('/identify', { method: 'POST', body: formData });
         const data = await res.json();
         if (data.result && data.result.title) {
-          out.innerText = "🎵 " + data.result.title + " — " + data.result.artist;
+          status.innerText = "Track Identified!";
+          renderShazamResult(data.result);
         } else if (data.error) {
-          out.innerText = "AudD Error: " + (data.error.error_message || JSON.stringify(data.error));
-          out.className = "output error";
+          status.innerText = "Error: " + (data.error.error_message || "Recognition failed");
+          status.className = "shazam-status error";
         } else {
-          out.innerText = "No exact match found.";
-          out.className = "output error";
+          status.innerText = "No match found. Try again closer to the speaker.";
+          status.className = "shazam-status error";
         }
       } catch (e) {
-        out.innerText = "Upload error: " + e.message;
-        out.className = "output error";
+        status.innerText = "Upload failed: " + e.message;
+        status.className = "shazam-status error";
       }
     }
 
-    async function recordAudio() {
-      const btn = document.getElementById('micBtn');
-      const out = document.getElementById('audioOutput');
-      out.className = "output";
+    async function startShazam() {
+      const status = document.getElementById('shazamStatus');
+      const wrapper = document.getElementById('pulseWrapper');
+      const resContainer = document.getElementById('resultContainer');
+      resContainer.innerHTML = "";
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        document.getElementById('filePicker').click();
+        return;
+      }
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        let mimeType = 'audio/webm';
+        if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        }
+
         const mediaRecorder = new MediaRecorder(stream);
         const audioChunks = [];
 
@@ -207,31 +391,27 @@ HTML_TEMPLATE = """
         };
 
         mediaRecorder.onstop = () => {
-          const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-          uploadAudioFile(audioBlob);
-          btn.disabled = false;
-          btn.innerText = "Identify Music (7s)";
+          const audioBlob = new Blob(audioChunks, { type: mimeType });
+          uploadAudio(audioBlob);
         };
 
         mediaRecorder.start(250);
-        btn.disabled = true;
-        let count = 7;
-        btn.innerText = `Listening (${count}s)...`;
-        const interval = setInterval(() => {
-          count--;
-          if (count > 0) {
-            btn.innerText = `Listening (${count}s)...`;
+        wrapper.classList.add('pulsing');
+
+        let secondsLeft = 6;
+        status.innerText = `Listening... (${secondsLeft}s)`;
+        const timer = setInterval(() => {
+          secondsLeft--;
+          if (secondsLeft > 0) {
+            status.innerText = `Listening... (${secondsLeft}s)`;
           } else {
-            clearInterval(interval);
+            clearInterval(timer);
             mediaRecorder.stop();
             stream.getTracks().forEach(t => t.stop());
           }
         }, 1000);
       } catch (err) {
-        out.innerText = "Mic blocked by WebView: tap 'Choose Audio File' to select a clip.";
-        out.className = "output error";
-        btn.disabled = false;
-        btn.innerText = "Identify Music (7s)";
+        wrapper.classList.remove('pulsing');
         document.getElementById('filePicker').click();
       }
     }
@@ -245,7 +425,6 @@ def index():
     return render_template_string(HTML_TEMPLATE)
 
 def get_supported_models(headers):
-    """Query Google API directly to get all models supporting generateContent."""
     try:
         url = "https://generativelanguage.googleapis.com/v1beta/models"
         r = requests.get(url, headers=headers, timeout=10)
@@ -255,7 +434,6 @@ def get_supported_models(headers):
             if "generateContent" in m.get("supportedGenerationMethods", []):
                 name = m.get("name", "").replace("models/", "")
                 models.append(name)
-        # Prioritize 3.6-flash if present
         if "gemini-3.6-flash" in models:
             models.remove("gemini-3.6-flash")
             models.insert(0, "gemini-3.6-flash")
