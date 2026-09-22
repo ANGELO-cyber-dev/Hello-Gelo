@@ -7,6 +7,13 @@ app = Flask(__name__)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 AUDD_API_KEY = os.getenv("AUDD_API_KEY", "").strip()
 
+FALLBACK_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-1.5-flash",
+    "gemini-3.6-flash",
+    "gemini-2.0-flash"
+]
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -63,6 +70,7 @@ HTML_TEMPLATE = """
     .btn-row {
       display: flex;
       gap: 10px;
+      flex-wrap: wrap;
     }
     button {
       background: #1f6feb;
@@ -76,6 +84,9 @@ HTML_TEMPLATE = """
     }
     button.btn-green {
       background: #238636;
+    }
+    button.btn-gray {
+      background: #30363d;
     }
     button:disabled {
       opacity: 0.5;
@@ -92,6 +103,9 @@ HTML_TEMPLATE = """
     .error {
       color: #f85149;
     }
+    #nativeAudioInput {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -100,7 +114,7 @@ HTML_TEMPLATE = """
 
   <div class="card">
     <div class="card-title">💬 Conversational Brain</div>
-    <textarea id="promptInput" rows="3" placeholder="Ask me anything...">Hello</textarea>
+    <textarea id="promptInput" rows="3" placeholder="Ask me anything...">Teach me python programming</textarea>
     <div class="btn-row">
       <button id="askBtn" onclick="askAi()">Ask Gelo</button>
       <button class="btn-green" onclick="readAloud()">🗣️ Read</button>
@@ -110,7 +124,11 @@ HTML_TEMPLATE = """
 
   <div class="card">
     <div class="card-title">🎵 Audio & Media Recognition</div>
-    <button id="micBtn" onclick="startAudioCapture()">Identify Music (7s)</button>
+    <div class="btn-row">
+      <button id="micBtn" onclick="startAudioCapture()">Record & Identify (7s)</button>
+      <button class="btn-gray" onclick="document.getElementById('nativeAudioInput').click()">Record via System</button>
+    </div>
+    <input type="file" id="nativeAudioInput" accept="audio/*" capture="microphone" onchange="uploadFile(this.files[0])">
     <div id="audioOutput" class="output"></div>
   </div>
 
@@ -154,46 +172,65 @@ HTML_TEMPLATE = """
       window.speechSynthesis.speak(utterance);
     }
 
+    async function uploadFile(file) {
+      if (!file) return;
+      const out = document.getElementById('audioOutput');
+      out.innerText = "Identifying audio via AudD...";
+      out.className = "output";
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/identify', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.result && data.result.title) {
+          out.innerText = "🎵 " + data.result.title + " — " + data.result.artist;
+        } else if (data.status === "error" || data.error) {
+          out.innerText = "AudD Error: " + (data.error.error_message || JSON.stringify(data.error));
+          out.className = "output error";
+        } else {
+          out.innerText = "No exact match found.";
+          out.className = "output error";
+        }
+      } catch (e) {
+        out.innerText = "Upload error: " + e.message;
+        out.className = "output error";
+      }
+    }
+
     async function startAudioCapture() {
       const btn = document.getElementById('micBtn');
       const out = document.getElementById('audioOutput');
       out.className = "output";
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        document.getElementById('nativeAudioInput').click();
+        return;
+      }
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        let mimeType = 'audio/webm';
+        if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        }
+
         const mediaRecorder = new MediaRecorder(stream);
         const audioChunks = [];
 
         mediaRecorder.ondataavailable = e => {
-          if (e.data.size > 0) audioChunks.push(e.data);
+          if (e.data && e.data.size > 0) audioChunks.push(e.data);
         };
 
-        mediaRecorder.onstop = async () => {
-          out.innerText = "Analyzing song with AudD...";
-          const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-          const formData = new FormData();
-          formData.append('file', audioBlob);
-
-          try {
-            const res = await fetch('/identify', { method: 'POST', body: formData });
-            const data = await res.json();
-            if (data.result && data.result.title) {
-              out.innerText = `🎵 ${data.result.title} — ${data.result.artist}`;
-            } else if (data.status === "error") {
-              out.innerText = "AudD Error: " + data.error.error_message;
-              out.className = "output error";
-            } else {
-              out.innerText = "No exact match found. Make sure recognizable music is playing audibly near your microphone.";
-              out.className = "output error";
-            }
-          } catch (e) {
-            out.innerText = "Recognition error: " + e.message;
-            out.className = "output error";
-          }
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunks, { type: mimeType });
+          uploadFile(audioBlob);
           btn.disabled = false;
-          btn.innerText = "Identify Music (7s)";
+          btn.innerText = "Record & Identify (7s)";
         };
 
-        mediaRecorder.start();
+        mediaRecorder.start(250);
         btn.disabled = true;
         let count = 7;
         btn.innerText = `Listening (${count}s)...`;
@@ -208,8 +245,11 @@ HTML_TEMPLATE = """
           }
         }, 1000);
       } catch (err) {
-        out.innerText = "Microphone error: " + err.message;
-        out.className = "output error";
+        out.innerText = "In-app mic capture restricted by wrapper. Opening system recorder...";
+        out.className = "output";
+        btn.disabled = false;
+        btn.innerText = "Record & Identify (7s)";
+        document.getElementById('nativeAudioInput').click();
       }
     }
   </script>
@@ -227,7 +267,7 @@ def ask():
     if not prompt:
         return jsonify({"error": "Empty prompt"}), 400
     if not GEMINI_API_KEY:
-        return jsonify({"error": "GEMINI_API_KEY environment variable missing on Render."}), 500
+        return jsonify({"error": "GEMINI_API_KEY missing on Render."}), 500
 
     headers = {
         "Content-Type": "application/json",
@@ -235,22 +275,23 @@ def ask():
     }
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    for model in ["gemini-3.6-flash", "gemini-1.5-flash"]:
+    last_error = ""
+    for model in FALLBACK_MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            res = requests.post(url, headers=headers, json=payload, timeout=25)
+            res = requests.post(url, headers=headers, json=payload, timeout=20)
             data = res.json()
             if "candidates" in data and data["candidates"]:
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
                 return jsonify({"answer": text})
             elif "error" in data:
-                err_msg = data["error"].get("message", "")
-                if "not found" not in err_msg.lower():
-                    return jsonify({"error": f"Gemini Error: {err_msg}"}), 400
-        except Exception:
+                last_error = data["error"].get("message", "")
+                continue
+        except Exception as e:
+            last_error = str(e)
             continue
 
-    return jsonify({"error": "Unable to contact Gemini. Verify your API key on Render."}), 500
+    return jsonify({"error": f"Gemini Error: {last_error}"}), 500
 
 @app.route("/identify", methods=["POST"])
 def identify():
