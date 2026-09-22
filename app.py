@@ -13,7 +13,7 @@ HTML_TEMPLATE = """
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hello Gelo Live</title>
+  <title>HELLO Gelo</title>
   <style>
     body {
       background-color: #0d1117;
@@ -96,7 +96,7 @@ HTML_TEMPLATE = """
 </head>
 <body>
 
-  <div class="header">⚡ Hello Gelo Live</div>
+  <div class="header">⚡ HELLO Gelo</div>
 
   <div class="card">
     <div class="card-title">💬 Conversational Brain</div>
