@@ -8,30 +8,13 @@ app = Flask(__name__)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 AUDD_API_KEY = os.getenv("AUDD_API_KEY", "")
 
-def get_active_model() -> str:
-    """Detect available model or fallback."""
-    if not GEMINI_API_KEY:
-        return "gemini-2.5-flash"
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
-        res = requests.get(url, timeout=5).json()
-        if "models" in res:
-            for m in res["models"]:
-                methods = m.get("supportedGenerationMethods", [])
-                name = m.get("name", "").replace("models/", "")
-                if "generateContent" in methods and "flash" in name:
-                    return name
-    except Exception:
-        pass
-    return "gemini-2.5-flash"
-
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hello Gelo - Live AI</title>
+  <title>Hello Gelo Live</title>
   <style>
     body {
       background-color: #0d1117;
@@ -67,7 +50,7 @@ HTML_TEMPLATE = """
       align-items: center;
       gap: 8px;
     }
-    textarea, input {
+    textarea {
       width: 100%;
       background: #0d1117;
       border: 1px solid #30363d;
@@ -125,10 +108,9 @@ HTML_TEMPLATE = """
 
   <div class="header">⚡ Hello Gelo Live</div>
 
-  <!-- Live Conversational Brain -->
   <div class="card">
     <div class="card-title">💬 Conversational Brain (Live Stream)</div>
-    <textarea id="promptInput" rows="3" placeholder="Type here to chat live..."></textarea>
+    <textarea id="promptInput" rows="3" placeholder="Type here to chat live...">Hello</textarea>
     <div class="btn-row">
       <button id="askBtn" onclick="askLive()">Ask Gelo</button>
       <button class="btn-green" onclick="readAloud()">🗣️ Read</button>
@@ -136,7 +118,6 @@ HTML_TEMPLATE = """
     <div id="aiOutput" class="output"></div>
   </div>
 
-  <!-- Audio & Media Recognition -->
   <div class="card">
     <div class="card-title">🎵 Audio & Media Recognition</div>
     <button id="micBtn" onclick="startAudioCapture()">Identify Music (6s)</button>
@@ -252,14 +233,18 @@ def stream_ai():
     prompt = request.json.get("prompt", "")
     if not prompt:
         return "Please provide a prompt.", 400
+    if not GEMINI_API_KEY:
+        return "GEMINI_API_KEY environment variable is missing on Render.", 500
 
     def generate():
-        model = get_active_model()
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
         try:
-            with requests.post(url, json=payload, stream=True, timeout=60) as resp:
+            with requests.post(url, json=payload, stream=True, timeout=30) as resp:
+                if resp.status_code != 200:
+                    yield f"API Error ({resp.status_code}): {resp.text}"
+                    return
                 for line in resp.iter_lines():
                     if line:
                         decoded = line.decode('utf-8')
@@ -276,7 +261,7 @@ def stream_ai():
                             except Exception:
                                 continue
         except Exception as e:
-            yield f" [Stream Error: {str(e)}]"
+            yield f"Stream connection error: {str(e)}"
 
     return Response(stream_with_context(generate()), mimetype="text/plain")
 
