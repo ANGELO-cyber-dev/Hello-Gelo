@@ -7,6 +7,14 @@ app = Flask(__name__)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 AUDD_API_KEY = os.getenv("AUDD_API_KEY", "").strip()
 
+# Models tried in sequence if quota or traffic limits are reached
+MODELS_TO_TRY = [
+    "gemini-3.6-flash",
+    "gemini-1.5-pro",
+    "gemini-2.5-pro",
+    "gemini-pro"
+]
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -107,7 +115,7 @@ HTML_TEMPLATE = """
 
   <div class="card">
     <div class="card-title">💬 Conversational Brain</div>
-    <textarea id="promptInput" rows="3" placeholder="Ask me anything...">Teach me python programming</textarea>
+    <textarea id="promptInput" rows="3" placeholder="Ask me anything...">Hello Gelo</textarea>
     <div class="btn-row">
       <button id="askBtn" onclick="askAi()">Ask Gelo</button>
       <button class="btn-green" onclick="readAloud()">🗣️ Read</button>
@@ -249,7 +257,7 @@ def ask():
     if not prompt:
         return jsonify({"error": "Empty prompt"}), 400
     if not GEMINI_API_KEY:
-        return jsonify({"error": "GEMINI_API_KEY is missing on Render."}), 500
+        return jsonify({"error": "GEMINI_API_KEY missing on Render."}), 500
 
     headers = {
         "Content-Type": "application/json",
@@ -257,30 +265,28 @@ def ask():
     }
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    # Lock strictly to gemini-3.6-flash as requested by Google AI API
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
-    
-    # Retry up to 3 times if server reports temporary high demand
-    import time
-    for attempt in range(3):
+    last_error = ""
+    for model in MODELS_TO_TRY:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            res = requests.post(url, headers=headers, json=payload, timeout=25)
+            res = requests.post(url, headers=headers, json=payload, timeout=20)
             data = res.json()
             if "candidates" in data and data["candidates"]:
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
                 return jsonify({"answer": text})
             elif "error" in data:
                 err_msg = data["error"].get("message", "")
-                if "high demand" in err_msg.lower() or "overloaded" in err_msg.lower():
-                    time.sleep(1.5)
+                last_error = err_msg
+                # If rate-limited/quota exceeded, immediately fall through to the next model
+                if "quota" in err_msg.lower() or "limit" in err_msg.lower() or "demand" in err_msg.lower():
                     continue
-                return jsonify({"error": f"Gemini Error: {err_msg}"}), 400
+                else:
+                    continue
         except Exception as e:
-            if attempt == 2:
-                return jsonify({"error": f"Connection failed: {str(e)}"}), 500
-            time.sleep(1)
+            last_error = str(e)
+            continue
 
-    return jsonify({"error": "Google servers are experiencing heavy load right now. Please try again in a few seconds."}), 503
+    return jsonify({"error": f"Quota limit reached across fallback models. Please wait 60 seconds: {last_error}"}), 429
 
 @app.route("/identify", methods=["POST"])
 def identify():
