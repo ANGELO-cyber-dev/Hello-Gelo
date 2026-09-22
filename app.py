@@ -235,7 +235,7 @@ def ask():
     }
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    for model in ["gemini-2.5-flash", "gemini-1.5-flash"]:
+    for model in ["gemini-3.6-flash", "gemini-1.5-flash"]:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
             res = requests.post(url, headers=headers, json=payload, timeout=25)
