@@ -7,13 +7,6 @@ app = Flask(__name__)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 AUDD_API_KEY = os.getenv("AUDD_API_KEY", "").strip()
 
-FALLBACK_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-1.5-flash",
-    "gemini-3.6-flash",
-    "gemini-2.0-flash"
-]
-
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -103,7 +96,7 @@ HTML_TEMPLATE = """
     .error {
       color: #f85149;
     }
-    #nativeAudioInput {
+    #filePicker {
       display: none;
     }
   </style>
@@ -125,10 +118,10 @@ HTML_TEMPLATE = """
   <div class="card">
     <div class="card-title">🎵 Audio & Media Recognition</div>
     <div class="btn-row">
-      <button id="micBtn" onclick="startAudioCapture()">Record & Identify (7s)</button>
-      <button class="btn-gray" onclick="document.getElementById('nativeAudioInput').click()">Record via System</button>
+      <button id="micBtn" onclick="recordAudio()">Identify Music (7s)</button>
+      <button class="btn-gray" onclick="document.getElementById('filePicker').click()">Choose Audio File</button>
     </div>
-    <input type="file" id="nativeAudioInput" accept="audio/*" capture="microphone" onchange="uploadFile(this.files[0])">
+    <input type="file" id="filePicker" accept="audio/*" onchange="uploadAudioFile(this.files[0])">
     <div id="audioOutput" class="output"></div>
   </div>
 
@@ -172,7 +165,7 @@ HTML_TEMPLATE = """
       window.speechSynthesis.speak(utterance);
     }
 
-    async function uploadFile(file) {
+    async function uploadAudioFile(file) {
       if (!file) return;
       const out = document.getElementById('audioOutput');
       out.innerText = "Identifying audio via AudD...";
@@ -186,7 +179,7 @@ HTML_TEMPLATE = """
         const data = await res.json();
         if (data.result && data.result.title) {
           out.innerText = "🎵 " + data.result.title + " — " + data.result.artist;
-        } else if (data.status === "error" || data.error) {
+        } else if (data.error) {
           out.innerText = "AudD Error: " + (data.error.error_message || JSON.stringify(data.error));
           out.className = "output error";
         } else {
@@ -199,23 +192,13 @@ HTML_TEMPLATE = """
       }
     }
 
-    async function startAudioCapture() {
+    async function recordAudio() {
       const btn = document.getElementById('micBtn');
       const out = document.getElementById('audioOutput');
       out.className = "output";
 
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        document.getElementById('nativeAudioInput').click();
-        return;
-      }
-
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        let mimeType = 'audio/webm';
-        if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          mimeType = 'audio/mp4';
-        }
-
         const mediaRecorder = new MediaRecorder(stream);
         const audioChunks = [];
 
@@ -224,10 +207,10 @@ HTML_TEMPLATE = """
         };
 
         mediaRecorder.onstop = () => {
-          const audioBlob = new Blob(audioChunks, { type: mimeType });
-          uploadFile(audioBlob);
+          const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+          uploadAudioFile(audioBlob);
           btn.disabled = false;
-          btn.innerText = "Record & Identify (7s)";
+          btn.innerText = "Identify Music (7s)";
         };
 
         mediaRecorder.start(250);
@@ -245,11 +228,10 @@ HTML_TEMPLATE = """
           }
         }, 1000);
       } catch (err) {
-        out.innerText = "In-app mic capture restricted by wrapper. Opening system recorder...";
-        out.className = "output";
+        out.innerText = "Mic Error: " + err.message + ". Tap 'Choose Audio File' to select a recorded clip instead.";
+        out.className = "output error";
         btn.disabled = false;
-        btn.innerText = "Record & Identify (7s)";
-        document.getElementById('nativeAudioInput').click();
+        btn.innerText = "Identify Music (7s)";
       }
     }
   </script>
@@ -267,7 +249,7 @@ def ask():
     if not prompt:
         return jsonify({"error": "Empty prompt"}), 400
     if not GEMINI_API_KEY:
-        return jsonify({"error": "GEMINI_API_KEY missing on Render."}), 500
+        return jsonify({"error": "GEMINI_API_KEY is missing on Render."}), 500
 
     headers = {
         "Content-Type": "application/json",
@@ -275,23 +257,30 @@ def ask():
     }
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    last_error = ""
-    for model in FALLBACK_MODELS:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    # Lock strictly to gemini-3.6-flash as requested by Google AI API
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
+    
+    # Retry up to 3 times if server reports temporary high demand
+    import time
+    for attempt in range(3):
         try:
-            res = requests.post(url, headers=headers, json=payload, timeout=20)
+            res = requests.post(url, headers=headers, json=payload, timeout=25)
             data = res.json()
             if "candidates" in data and data["candidates"]:
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
                 return jsonify({"answer": text})
             elif "error" in data:
-                last_error = data["error"].get("message", "")
-                continue
+                err_msg = data["error"].get("message", "")
+                if "high demand" in err_msg.lower() or "overloaded" in err_msg.lower():
+                    time.sleep(1.5)
+                    continue
+                return jsonify({"error": f"Gemini Error: {err_msg}"}), 400
         except Exception as e:
-            last_error = str(e)
-            continue
+            if attempt == 2:
+                return jsonify({"error": f"Connection failed: {str(e)}"}), 500
+            time.sleep(1)
 
-    return jsonify({"error": f"Gemini Error: {last_error}"}), 500
+    return jsonify({"error": "Google servers are experiencing heavy load right now. Please try again in a few seconds."}), 503
 
 @app.route("/identify", methods=["POST"])
 def identify():
