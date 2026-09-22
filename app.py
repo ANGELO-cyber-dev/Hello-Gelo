@@ -9,7 +9,7 @@ API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6JXBCkvuIQfLF327QuNxlE8iumwj
 CANDIDATE_MODELS = [
     "gemini-1.5-flash",
     "gemini-1.5-pro",
-    "gemini-2.0-flash-exp"
+    "gemini-1.5-flash-8b"
 ]
 
 def call_gemini(prompt: str) -> str:
