@@ -243,7 +243,7 @@ HTML_TEMPLATE = """
 
   <div class="card">
     <div class="card-title">💬 Conversational Brain</div>
-    <textarea id="promptInput" rows="3" placeholder="Ask me anything...">Hello Gelo</textarea>
+    <textarea id="promptInput" rows="3" placeholder="Ask me anything...">I want to learn Forex Trading can you give me a website I can learn from</textarea>
     <div class="btn-row">
       <button class="action-btn" id="askBtn" onclick="askAi()">Ask Gelo</button>
       <button class="action-btn btn-green" onclick="readAloud()">🗣️ Read</button>
@@ -286,11 +286,18 @@ HTML_TEMPLATE = """
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ prompt })
         });
-        const data = await response.json();
-        if (data.answer) {
-          output.innerText = data.answer;
+        
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const data = await response.json();
+          if (data.answer) {
+            output.innerText = data.answer;
+          } else {
+            output.innerText = data.error || "No response received.";
+            output.className = "output error";
+          }
         } else {
-          output.innerText = data.error || "No response received.";
+          output.innerText = "Server is warming up or timed out. Please try again.";
           output.className = "output error";
         }
       } catch (err) {
@@ -339,7 +346,7 @@ HTML_TEMPLATE = """
       if (!file) return;
       const status = document.getElementById('shazamStatus');
       const wrapper = document.getElementById('pulseWrapper');
-      status.innerText = "Searching Shazam database...";
+      status.innerText = "Searching database...";
       status.className = "shazam-status";
       wrapper.classList.remove('pulsing');
 
@@ -356,7 +363,7 @@ HTML_TEMPLATE = """
           status.innerText = "Error: " + (data.error.error_message || "Recognition failed");
           status.className = "shazam-status error";
         } else {
-          status.innerText = "No match found. Try again closer to the speaker.";
+          status.innerText = "No match found. Try playing closer to speaker.";
           status.className = "shazam-status error";
         }
       } catch (e) {
@@ -424,30 +431,13 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE)
 
-def get_supported_models(headers):
-    try:
-        url = "https://generativelanguage.googleapis.com/v1beta/models"
-        r = requests.get(url, headers=headers, timeout=10)
-        data = r.json()
-        models = []
-        for m in data.get("models", []):
-            if "generateContent" in m.get("supportedGenerationMethods", []):
-                name = m.get("name", "").replace("models/", "")
-                models.append(name)
-        if "gemini-3.6-flash" in models:
-            models.remove("gemini-3.6-flash")
-            models.insert(0, "gemini-3.6-flash")
-        return models
-    except Exception:
-        return ["gemini-3.6-flash"]
-
 @app.route("/ask", methods=["POST"])
 def ask():
     prompt = request.json.get("prompt", "")
     if not prompt:
         return jsonify({"error": "Empty prompt"}), 400
     if not GEMINI_API_KEY:
-        return jsonify({"error": "GEMINI_API_KEY missing on Render."}), 500
+        return jsonify({"error": "GEMINI_API_KEY is missing on Render."}), 500
 
     headers = {
         "Content-Type": "application/json",
@@ -455,25 +445,21 @@ def ask():
     }
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    available_models = get_supported_models(headers)
-    last_error = ""
-
-    for model in available_models:
+    # Try 2.5-flash first; if unavailable, fallback directly to 3.6-flash
+    for model in ["gemini-2.5-flash", "gemini-3.6-flash"]:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            res = requests.post(url, headers=headers, json=payload, timeout=20)
+            res = requests.post(url, headers=headers, json=payload, timeout=18)
             data = res.json()
             if "candidates" in data and data["candidates"]:
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
                 return jsonify({"answer": text})
             elif "error" in data:
-                last_error = f"{model}: {data['error'].get('message', '')}"
                 continue
-        except Exception as e:
-            last_error = str(e)
+        except Exception:
             continue
 
-    return jsonify({"error": f"Failed across available models: {last_error}"}), 500
+    return jsonify({"error": "Gemini servers are busy. Please tap Ask Gelo again in a moment."}), 503
 
 @app.route("/identify", methods=["POST"])
 def identify():
