@@ -1,6 +1,7 @@
 import os
+import json
 import requests
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, Response, stream_with_context
 
 app = Flask(__name__)
 
@@ -8,51 +9,21 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 AUDD_API_KEY = os.getenv("AUDD_API_KEY", "")
 
 def get_active_model() -> str:
-    """Fetch the first active model that supports generateContent."""
+    """Detect available model or fallback."""
     if not GEMINI_API_KEY:
         return "gemini-2.5-flash"
     try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
-        res = requests.get(url, timeout=10).json()
+        res = requests.get(url, timeout=5).json()
         if "models" in res:
             for m in res["models"]:
                 methods = m.get("supportedGenerationMethods", [])
                 name = m.get("name", "").replace("models/", "")
                 if "generateContent" in methods and "flash" in name:
                     return name
-            for m in res["models"]:
-                methods = m.get("supportedGenerationMethods", [])
-                if "generateContent" in methods:
-                    return m.get("name", "").replace("models/", "")
     except Exception:
         pass
     return "gemini-2.5-flash"
-
-def call_gemini(prompt: str) -> str:
-    if not GEMINI_API_KEY:
-        return "Gemini API key is missing. Please set GEMINI_API_KEY in Render environment variables."
-    
-    primary_model = get_active_model()
-    fallback_models = [primary_model, "gemini-2.5-flash", "gemini-3.6-flash", "gemini-1.5-flash"]
-    # Preserve order while deduplicating
-    models_to_try = list(dict.fromkeys(fallback_models))
-    
-    last_err = ""
-    for model in models_to_try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
-        payload = {"contents": [{"parts": [{"text": prompt}]}]}
-        try:
-            res = requests.post(url, json=payload, timeout=25).json()
-            if "candidates" in res and res["candidates"]:
-                return res["candidates"][0]["content"]["parts"][0]["text"]
-            elif "error" in res:
-                last_err = res["error"].get("message", "")
-                continue
-        except Exception as e:
-            last_err = str(e)
-            continue
-            
-    return f"Gemini Error: {last_err or 'No responsive model found.'}"
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -60,7 +31,7 @@ HTML_TEMPLATE = """
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hello Gelo</title>
+  <title>Hello Gelo - Live AI</title>
   <style>
     body {
       background-color: #0d1117;
@@ -112,7 +83,7 @@ HTML_TEMPLATE = """
       gap: 10px;
     }
     button {
-      background: #238636;
+      background: #1f6feb;
       border: none;
       color: #fff;
       padding: 10px 14px;
@@ -121,40 +92,46 @@ HTML_TEMPLATE = """
       font-weight: 600;
       cursor: pointer;
     }
-    button.btn-blue {
-      background: #1f6feb;
+    button.btn-green {
+      background: #238636;
     }
     button:disabled {
       opacity: 0.5;
     }
     .output {
-      margin-top: 10px;
-      font-size: 13px;
-      color: #8b949e;
+      margin-top: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #c9d1d9;
       white-space: pre-wrap;
       word-break: break-word;
+      min-height: 24px;
+    }
+    .cursor::after {
+      content: "▋";
+      color: #58a6ff;
+      animation: blink 1s infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
     }
     .error {
       color: #f85149;
-    }
-    .inputs-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
     }
   </style>
 </head>
 <body>
 
-  <div class="header">⚡ Hello Gelo</div>
+  <div class="header">⚡ Hello Gelo Live</div>
 
-  <!-- Conversational Brain -->
+  <!-- Live Conversational Brain -->
   <div class="card">
-    <div class="card-title">💬 Conversational Brain</div>
-    <textarea id="promptInput" rows="3" placeholder="Ask me anything..."></textarea>
+    <div class="card-title">💬 Conversational Brain (Live Stream)</div>
+    <textarea id="promptInput" rows="3" placeholder="Type here to chat live..."></textarea>
     <div class="btn-row">
-      <button class="btn-blue" onclick="askGelo()">Ask Gelo</button>
-      <button onclick="readAloud()">🗣️ Read Aloud</button>
+      <button id="askBtn" onclick="askLive()">Ask Gelo</button>
+      <button class="btn-green" onclick="readAloud()">🗣️ Read</button>
     </div>
     <div id="aiOutput" class="output"></div>
   </div>
@@ -162,40 +139,42 @@ HTML_TEMPLATE = """
   <!-- Audio & Media Recognition -->
   <div class="card">
     <div class="card-title">🎵 Audio & Media Recognition</div>
-    <button class="btn-blue" id="micBtn" onclick="startAudioCapture()">Identify Music (6s)</button>
+    <button id="micBtn" onclick="startAudioCapture()">Identify Music (6s)</button>
     <div id="audioOutput" class="output"></div>
   </div>
 
-  <!-- Pattern Analysis -->
-  <div class="card">
-    <div class="card-title">⚙️ Pattern Analysis</div>
-    <div class="inputs-grid">
-      <input type="number" id="paramA" value="15" placeholder="Value A">
-      <input type="number" id="paramB" value="1.5" placeholder="Value B">
-    </div>
-    <button class="btn-blue" onclick="analyzePattern()">Analyze Pattern</button>
-    <div id="patternOutput" class="output"></div>
-  </div>
-
   <script>
-    async function askGelo() {
+    async function askLive() {
       const prompt = document.getElementById('promptInput').value.trim();
       const output = document.getElementById('aiOutput');
+      const askBtn = document.getElementById('askBtn');
       if (!prompt) return;
-      output.innerText = "Thinking...";
-      output.className = "output";
+
+      output.innerText = "";
+      output.className = "output cursor";
+      askBtn.disabled = true;
+
       try {
-        const res = await fetch('/ask', {
+        const response = await fetch('/stream', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ prompt })
         });
-        const data = await res.json();
-        output.innerText = data.answer || data.error;
-        if (data.error) output.className = "output error";
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          output.innerText += decoder.decode(value, { stream: true });
+        }
       } catch (err) {
-        output.innerText = "Error: " + err.message;
+        output.innerText = "Connection error: " + err.message;
         output.className = "output error";
+      } finally {
+        output.className = "output";
+        askBtn.disabled = false;
       }
     }
 
@@ -229,7 +208,7 @@ HTML_TEMPLATE = """
             if (data.result) {
               out.innerText = `🎵 ${data.result.title} — ${data.result.artist}`;
             } else {
-              out.innerText = "No clear song detected. Move closer to the speaker.";
+              out.innerText = "No song identified.";
               out.className = "output error";
             }
           } catch (e) {
@@ -259,13 +238,6 @@ HTML_TEMPLATE = """
         out.className = "output error";
       }
     }
-
-    function analyzePattern() {
-      const a = parseFloat(document.getElementById('paramA').value) || 0;
-      const b = parseFloat(document.getElementById('paramB').value) || 0;
-      const res = ((a * b) / 10).toFixed(2);
-      document.getElementById('patternOutput').innerText = `Calculated Index: ${res} | Volatility Normal`;
-    }
   </script>
 </body>
 </html>
@@ -275,13 +247,38 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE)
 
-@app.route("/ask", methods=["POST"])
-def ask():
+@app.route("/stream", methods=["POST"])
+def stream_ai():
     prompt = request.json.get("prompt", "")
     if not prompt:
-        return jsonify({"error": "Empty prompt"}), 400
-    answer = call_gemini(prompt)
-    return jsonify({"answer": answer})
+        return "Please provide a prompt.", 400
+
+    def generate():
+        model = get_active_model()
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+        
+        try:
+            with requests.post(url, json=payload, stream=True, timeout=60) as resp:
+                for line in resp.iter_lines():
+                    if line:
+                        decoded = line.decode('utf-8')
+                        if decoded.startswith("data: "):
+                            data_str = decoded[6:]
+                            try:
+                                chunk = json.loads(data_str)
+                                candidates = chunk.get("candidates", [])
+                                if candidates:
+                                    part = candidates[0].get("content", {}).get("parts", [{}])[0]
+                                    text = part.get("text", "")
+                                    if text:
+                                        yield text
+                            except Exception:
+                                continue
+        except Exception as e:
+            yield f" [Stream Error: {str(e)}]"
+
+    return Response(stream_with_context(generate()), mimetype="text/plain")
 
 @app.route("/identify", methods=["POST"])
 def identify():
