@@ -7,14 +7,6 @@ app = Flask(__name__)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 AUDD_API_KEY = os.getenv("AUDD_API_KEY", "").strip()
 
-# Models tried in sequence if quota or traffic limits are reached
-MODELS_TO_TRY = [
-    "gemini-3.6-flash",
-    "gemini-1.5-pro",
-    "gemini-2.5-pro",
-    "gemini-pro"
-]
-
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -236,10 +228,11 @@ HTML_TEMPLATE = """
           }
         }, 1000);
       } catch (err) {
-        out.innerText = "Mic Error: " + err.message + ". Tap 'Choose Audio File' to select a recorded clip instead.";
+        out.innerText = "Mic blocked by WebView: tap 'Choose Audio File' to select a clip.";
         out.className = "output error";
         btn.disabled = false;
         btn.innerText = "Identify Music (7s)";
+        document.getElementById('filePicker').click();
       }
     }
   </script>
@@ -250,6 +243,25 @@ HTML_TEMPLATE = """
 @app.route("/")
 def index():
     return render_template_string(HTML_TEMPLATE)
+
+def get_supported_models(headers):
+    """Query Google API directly to get all models supporting generateContent."""
+    try:
+        url = "https://generativelanguage.googleapis.com/v1beta/models"
+        r = requests.get(url, headers=headers, timeout=10)
+        data = r.json()
+        models = []
+        for m in data.get("models", []):
+            if "generateContent" in m.get("supportedGenerationMethods", []):
+                name = m.get("name", "").replace("models/", "")
+                models.append(name)
+        # Prioritize 3.6-flash if present
+        if "gemini-3.6-flash" in models:
+            models.remove("gemini-3.6-flash")
+            models.insert(0, "gemini-3.6-flash")
+        return models
+    except Exception:
+        return ["gemini-3.6-flash"]
 
 @app.route("/ask", methods=["POST"])
 def ask():
@@ -265,8 +277,10 @@ def ask():
     }
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
+    available_models = get_supported_models(headers)
     last_error = ""
-    for model in MODELS_TO_TRY:
+
+    for model in available_models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
             res = requests.post(url, headers=headers, json=payload, timeout=20)
@@ -275,18 +289,13 @@ def ask():
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
                 return jsonify({"answer": text})
             elif "error" in data:
-                err_msg = data["error"].get("message", "")
-                last_error = err_msg
-                # If rate-limited/quota exceeded, immediately fall through to the next model
-                if "quota" in err_msg.lower() or "limit" in err_msg.lower() or "demand" in err_msg.lower():
-                    continue
-                else:
-                    continue
+                last_error = f"{model}: {data['error'].get('message', '')}"
+                continue
         except Exception as e:
             last_error = str(e)
             continue
 
-    return jsonify({"error": f"Quota limit reached across fallback models. Please wait 60 seconds: {last_error}"}), 429
+    return jsonify({"error": f"Failed across available models: {last_error}"}), 500
 
 @app.route("/identify", methods=["POST"])
 def identify():
