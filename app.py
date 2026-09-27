@@ -1290,7 +1290,7 @@ def login_page():
 @app.route("/api/register", methods=["POST"])
 def register():
     data = request.json or {}
-    username = data.get("username", "").strip()
+    username = data.get("username", "").strip().lower()
     password = data.get("password", "").strip()
     display_name = data.get("display_name", "").strip()
 
@@ -1318,12 +1318,12 @@ def register():
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.json or {}
-    username = data.get("username", "").strip()
+    username = data.get("username", "").strip().lower()
     password = data.get("password", "").strip()
 
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT password_hash, display_name FROM users WHERE username = ?", (username,))
+    c.execute("SELECT password_hash, display_name FROM users WHERE LOWER(username) = LOWER(?)", (username,))
     row = c.fetchone()
     conn.close()
 
