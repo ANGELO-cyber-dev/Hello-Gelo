@@ -897,9 +897,33 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (e) => {
-        attachedImageBase64 = e.target.result;
-        document.getElementById('imageThumb').src = attachedImageBase64;
-        document.getElementById('previewTray').style.display = 'flex';
+        const img = new Image();
+        img.onload = () => {
+          // Downscale to max 800px to ensure fast upload & instant AI vision
+          const maxDim = 800;
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Compress to lightweight 0.72 quality JPEG
+          attachedImageBase64 = canvas.toDataURL('image/jpeg', 0.72);
+          document.getElementById('imageThumb').src = attachedImageBase64;
+          document.getElementById('previewTray').style.display = 'flex';
+        };
+        img.src = e.target.result;
       };
       reader.readAsDataURL(file);
     }
@@ -1541,7 +1565,7 @@ def ask_fast():
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
 
     try:
-        res = requests.post(url, headers=headers, json=payload, timeout=20)
+        res = requests.post(url, headers=headers, json=payload, timeout=40)
         data = res.json()
         if "candidates" in data and data["candidates"]:
             full_text = data["candidates"][0]["content"]["parts"][0]["text"]
