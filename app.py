@@ -1478,6 +1478,94 @@ def ask_stream():
 
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
+@app.route("/ask-fast", methods=["POST"])
+def ask_fast():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    req_data = request.json or {}
+    user_prompt = req_data.get("prompt", "").strip()
+    image_base64 = req_data.get("image", None)
+
+    if not user_prompt and not image_base64:
+        return jsonify({"error": "Empty inquiry"}), 400
+    if not GEMINI_API_KEY:
+        return jsonify({"error": "GEMINI_API_KEY missing."}), 500
+
+    username = session["user"]
+    display_name = session.get("display_name") or clean_name(username)
+    now_utc = datetime.now(timezone.utc).strftime('%A, %B %d, %Y, %H:%M:%S UTC')
+
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT role, text FROM messages WHERE username = ? ORDER BY id DESC LIMIT 6", (username,))
+    past_rows = c.fetchall()
+    past_rows.reverse()
+
+    c.execute("INSERT INTO messages (username, role, text) VALUES (?, ?, ?)", 
+              (username, "user", user_prompt if user_prompt else "[Attached Image]"))
+    conn.commit()
+
+    contents = []
+    for r in past_rows:
+        role = "user" if r[0] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": r[1]}]})
+
+    current_parts = []
+    if image_base64 and "," in image_base64:
+        header, b64data = image_base64.split(",", 1)
+        mime = "image/jpeg"
+        if "image/png" in header: mime = "image/png"
+        elif "image/webp" in header: mime = "image/webp"
+        current_parts.append({"inline_data": {"mime_type": mime, "data": b64data}})
+    if user_prompt:
+        current_parts.append({"text": user_prompt})
+
+    contents.append({"role": "user", "parts": current_parts})
+
+    payload = {
+        "system_instruction": {
+            "parts": [{
+                "text": (
+                    f"You are Gelo, a high-precision AI collaborator. The user's name is {display_name}. "
+                    f"The current reference time is {now_utc}. Engage with concise clarity. "
+                    "Conduct your step-by-step reasoning process enclosed in <thought>...</thought> tags, "
+                    "then deliver your clean final response outside the tags in clean markdown."
+                )
+            }]
+        },
+        "contents": contents
+    }
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"
+    headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
+
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=20)
+        data = res.json()
+        if "candidates" in data and data["candidates"]:
+            full_text = data["candidates"][0]["content"]["parts"][0]["text"]
+            thought_match = re.search(r'<thought>(.*?)</thought>', full_text, re.DOTALL)
+            if thought_match:
+                thinking = thought_match.group(1).strip()
+                final_answer = re.sub(r'<thought>.*?</thought>', '', full_text, flags=re.DOTALL).strip()
+            else:
+                thinking = None
+                final_answer = full_text.strip()
+
+            c.execute("INSERT INTO messages (username, role, text, thinking) VALUES (?, ?, ?, ?)",
+                      (username, "model", final_answer, thinking))
+            conn.commit()
+            conn.close()
+
+            return jsonify({"thinking": thinking, "answer": final_answer})
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+
+    conn.close()
+    return jsonify({"error": "No response received"}), 500
+
 @app.route("/identify", methods=["POST"])
 def identify():
     if "user" not in session:
