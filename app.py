@@ -863,7 +863,7 @@ def ask():
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
     last_error = "Server busy."
 
-    for model in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+    for model in ["gemini-1.5-flash", "gemini-1.5-pro"]:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
             res = requests.post(url, headers=headers, json=payload, timeout=16)
