@@ -730,18 +730,24 @@ def ask():
 
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
 
-    for model in ["gemini-2.5-flash", "gemini-1.5-flash"]:
+    last_error = "Server busy."
+    for model in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"]:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            res = requests.post(url, headers=headers, json=payload, timeout=12)
+            res = requests.post(url, headers=headers, json=payload, timeout=15)
             data = res.json()
             if "candidates" in data and data["candidates"]:
-                raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                return jsonify({"answer": raw_text})
-        except Exception:
+                parts = data["candidates"][0]["content"]["parts"]
+                raw_text = "".join([p.get("text", "") for p in parts]).strip()
+                if raw_text:
+                    return jsonify({"answer": raw_text})
+            elif "error" in data:
+                last_error = data["error"].get("message", "API Error")
+        except Exception as e:
+            last_error = str(e)
             continue
 
-    return jsonify({"error": "Server busy. Please try again."}), 503
+    return jsonify({"error": f"API Error: {last_error}"}), 503
 
 @app.route("/identify", methods=["POST"])
 def identify():
