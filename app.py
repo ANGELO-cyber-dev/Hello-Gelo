@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import os
 import re
 import requests
@@ -839,7 +840,7 @@ def ask():
         "system_instruction": {
             "parts": [{
                 "text": (
-                    "You are Gelo, an elite conversational AI companion. "
+                    f"You are Gelo, an elite conversational AI companion. The current reference time is {datetime.now(timezone.utc).strftime('%A, %B %d, %Y, %H:%M:%S UTC')}. Use this live reference to compute exact current times, dates, and temporal queries accurately across any global timezone. "
                     "Engage in natural, continuous, multi-turn conversation. Remember details from prior messages. "
                     "Conduct a step-by-step reasoning process enclosed in <thought>...</thought> tags, "
                     "then deliver your final answer in clean, scannable markdown outside the tags."
