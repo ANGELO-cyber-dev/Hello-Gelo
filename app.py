@@ -1,7 +1,6 @@
 import os
-import json
 import requests
-from flask import Flask, request, jsonify, render_template_string, Response, stream_with_context
+from flask import Flask, request, jsonify, render_template_string
 
 app = Flask(__name__)
 
@@ -98,7 +97,7 @@ HTML_TEMPLATE = """
       align-items: center;
       justify-content: center;
       gap: 6px;
-      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.25s ease;
     }
 
     .tab-btn.active {
@@ -202,17 +201,12 @@ HTML_TEMPLATE = """
       color: var(--accent);
     }
 
-    .cursor-blink::after {
-      content: '▋';
-      display: inline-block;
-      color: var(--accent);
-      animation: blink 0.8s infinite;
-      margin-left: 2px;
-    }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0; }
+    .error-box {
+      color: #f87171;
+      background: rgba(239, 68, 68, 0.1);
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(239, 68, 68, 0.2);
     }
 
     /* Radar UI */
@@ -375,7 +369,7 @@ HTML_TEMPLATE = """
   <div class="glass-card active-view" id="viewBrain">
     <textarea id="promptInput" rows="3" placeholder="Ask Gelo anything...">Teach me python programming</textarea>
     <div class="btn-row">
-      <button class="btn btn-primary" id="askBtn" onclick="askAiStream()">Ask Gelo</button>
+      <button class="btn btn-primary" id="askBtn" onclick="askAiFast()">Ask Gelo</button>
       <button class="btn btn-green" onclick="readAloud()">🗣️ Read</button>
     </div>
     <div id="aiOutput" class="ai-output" style="display: none;"></div>
@@ -416,57 +410,54 @@ HTML_TEMPLATE = """
       document.getElementById('tabMusic').classList.toggle('active', tab === 'music');
     }
 
-    // High-speed SSE token streaming
-    async function askAiStream() {
+    // High-speed direct API call with client-side progressive typewriter
+    async function askAiFast() {
       const prompt = document.getElementById('promptInput').value.trim();
       const output = document.getElementById('aiOutput');
       const askBtn = document.getElementById('askBtn');
       if (!prompt) return;
 
       output.style.display = "block";
-      output.innerHTML = "";
-      output.classList.add('cursor-blink');
+      output.innerHTML = "<em>⚡ Gelo is thinking...</em>";
       askBtn.disabled = true;
 
-      let fullText = "";
-
       try {
-        const response = await fetch('/stream', {
+        const response = await fetch('/ask', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ prompt })
         });
 
-        if (!response.ok) {
-          const errData = await response.json();
-          output.innerHTML = errData.error || "Generation error.";
-          output.classList.remove('cursor-blink');
-          askBtn.disabled = false;
-          return;
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const textPiece = line.replace('data: ', '');
-              fullText += textPiece;
-              output.innerHTML = marked.parse(fullText);
-            }
-          }
+        const data = await response.json();
+        if (data.answer) {
+          typewriterRender(data.answer, output);
+        } else {
+          output.innerHTML = `<div class="error-box">${data.error || "No response received."}</div>`;
         }
       } catch (err) {
-        output.innerHTML = "Stream error: " + err.message;
+        output.innerHTML = `<div class="error-box">Connection failed: ${err.message}</div>`;
       } finally {
-        output.classList.remove('cursor-blink');
         askBtn.disabled = false;
       }
+    }
+
+    // Ultra-fast progressive markdown reveal
+    function typewriterRender(fullText, element) {
+      const words = fullText.split(' ');
+      let currentIdx = 0;
+      element.innerHTML = "";
+
+      const step = Math.max(1, Math.floor(words.length / 40));
+      const interval = setInterval(() => {
+        currentIdx += step;
+        if (currentIdx >= words.length) {
+          element.innerHTML = marked.parse(fullText);
+          clearInterval(interval);
+        } else {
+          const slice = words.slice(0, currentIdx).join(' ');
+          element.innerHTML = marked.parse(slice);
+        }
+      }, 25);
     }
 
     function readAloud() {
@@ -660,46 +651,49 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE)
 
-@app.route("/stream", methods=["POST"])
-def stream():
+@app.route("/ask", methods=["POST"])
+def ask():
     prompt = request.json.get("prompt", "")
     if not prompt:
         return jsonify({"error": "Empty prompt"}), 400
     if not GEMINI_API_KEY:
         return jsonify({"error": "GEMINI_API_KEY missing on Render."}), 500
 
-    # System instruction tailored for instant, high-signal, zero-fluff answers
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY
+    }
+
+    # High-signal system prompt
     payload = {
         "system_instruction": {
             "parts": [{
-                "text": "You are Gelo, a high-speed, expert AI assistant. Deliver sharp, actionable, zero-fluff responses. Start with the core answer immediately in sentence 1. Use formatted markdown and code blocks when helpful."
+                "text": "You are Gelo, a high-speed AI assistant on the HELLO Gelo platform. Deliver sharp, actionable, zero-fluff answers. Start with the direct solution immediately in sentence 1. Use clean markdown formatting and code blocks when appropriate."
             }]
         },
         "contents": [{"parts": [{"text": prompt}]}]
     }
 
-    def generate():
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
-        headers = {"Content-Type": "application/json"}
-        
-        with requests.post(url, headers=headers, json=payload, stream=True, timeout=25) as r:
-            for raw_line in r.iter_lines(decode_unicode=True):
-                if raw_line and raw_line.startswith("data: "):
-                    data_str = raw_line.replace("data: ", "").strip()
-                    try:
-                        chunk_json = json.loads(data_str)
-                        candidates = chunk_json.get("candidates", [])
-                        if candidates and "content" in candidates[0]:
-                            parts = candidates[0]["content"].get("parts", [])
-                            for part in parts:
-                                text_fragment = part.get("text", "")
-                                if text_fragment:
-                                    # Forward each token to the client via SSE
-                                    yield f"data: {text_fragment}\n\n"
-                    except Exception:
-                        continue
+    # Immediate failover chain
+    models = ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-1.5-flash"]
+    last_err = ""
 
-    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+    for model in models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        try:
+            res = requests.post(url, headers=headers, json=payload, timeout=20)
+            data = res.json()
+            if "candidates" in data and data["candidates"]:
+                text = data["candidates"][0]["content"]["parts"][0]["text"]
+                return jsonify({"answer": text})
+            elif "error" in data:
+                last_err = data["error"].get("message", "")
+                continue
+        except Exception as e:
+            last_err = str(e)
+            continue
+
+    return jsonify({"error": f"API busy: {last_err}"}), 503
 
 @app.route("/identify", methods=["POST"])
 def identify():
