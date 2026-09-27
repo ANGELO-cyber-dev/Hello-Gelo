@@ -12,7 +12,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 AUDD_API_KEY = os.getenv("AUDD_API_KEY", "").strip()
 DB_FILE = "users.db"
 
-# Initialize SQLite database for registered users
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -289,10 +288,39 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
     .msg-bot code { background: rgba(0, 0, 0, 0.5); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13px; }
     .msg-bot pre { background: rgba(0, 0, 0, 0.6); padding: 10px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
     .msg-bot pre code { background: transparent; padding: 0; }
-    .chat-input-bar { padding: 10px; border-top: 1px solid var(--card-border); background: #0c0e14; display: flex; gap: 8px; align-items: center; }
-    .chat-input { flex: 1; background: #141822; border: 1px solid var(--card-border); color: var(--text); padding: 10px 14px; border-radius: 12px; font-size: 14px; outline: none; }
+    .preview-tray {
+      padding: 6px 12px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: #0d111a;
+      border-top: 1px solid var(--card-border);
+    }
+    .preview-thumb { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; border: 1px solid var(--card-border); }
+    .chat-input-bar { padding: 8px 10px; border-top: 1px solid var(--card-border); background: #0c0e14; display: flex; gap: 6px; align-items: center; }
+    .chat-input { flex: 1; background: #141822; border: 1px solid var(--card-border); color: var(--text); padding: 10px 12px; border-radius: 10px; font-size: 14px; outline: none; }
     .chat-input:focus { border-color: var(--accent); }
-    .send-btn { background: #2563eb; border: none; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .icon-action-btn {
+      background: #141822;
+      border: 1px solid var(--card-border);
+      color: #94a3b8;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .icon-action-btn.active-mic {
+      background: #ef4444;
+      border-color: #f87171;
+      color: #fff;
+      animation: mic-pulse 1.2s infinite;
+    }
+    @keyframes mic-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .send-btn { background: #2563eb; border: none; color: #fff; padding: 0 16px; height: 38px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; }
     .send-btn:disabled { opacity: 0.5; }
     
     /* Radar */
@@ -341,7 +369,17 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
     <div class="chat-stream" id="chatStream">
       <div class="msg msg-bot">⚡ Hi {{ display_name }}! What would you like to explore or learn today?</div>
     </div>
+
+    <div class="preview-tray" id="previewTray">
+      <img id="imageThumb" class="preview-thumb" src="" alt="preview">
+      <span style="font-size: 12px; color: #94a3b8; flex: 1;">Image attached</span>
+      <span style="color: #ef4444; font-size: 18px; cursor: pointer;" onclick="clearAttachedImage()">&times;</span>
+    </div>
+
     <div class="chat-input-bar">
+      <button class="icon-action-btn" onclick="document.getElementById('fileInput').click()" title="Attach image">📎</button>
+      <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleImage(this.files[0])">
+      <button class="icon-action-btn" id="micBtn" onclick="toggleVoice()" title="Dictate">🎙️</button>
       <input type="text" class="chat-input" id="chatInput" placeholder="Reply or ask a question..." onkeydown="handleKey(event)">
       <button class="send-btn" id="sendBtn" onclick="sendChat()">Send</button>
     </div>
@@ -368,6 +406,9 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
 
   <script>
     let chatHistory = [];
+    let attachedImageBase64 = null;
+    let recognition = null;
+    let isRecording = false;
     let audioCtx, analyser, sourceNode, animFrame;
 
     document.addEventListener("DOMContentLoaded", renderHistory);
@@ -395,7 +436,82 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
 
     function resetChat() {
       chatHistory = [];
+      clearAttachedImage();
       document.getElementById('chatStream').innerHTML = '<div class="msg msg-bot">⚡ New topic started. What would you like to explore?</div>';
+    }
+
+    function handleImage(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 800;
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+            else { w = Math.round((w * maxDim) / h); h = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          attachedImageBase64 = canvas.toDataURL('image/jpeg', 0.72);
+          document.getElementById('imageThumb').src = attachedImageBase64;
+          document.getElementById('previewTray').style.display = 'flex';
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearAttachedImage() {
+      attachedImageBase64 = null;
+      document.getElementById('previewTray').style.display = 'none';
+      document.getElementById('fileInput').value = '';
+    }
+
+    function toggleVoice() {
+      const micBtn = document.getElementById('micBtn');
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Speech dictation not supported in this browser.");
+        return;
+      }
+
+      if (isRecording) {
+        recognition.stop();
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        isRecording = true;
+        micBtn.classList.add('active-mic');
+      };
+
+      recognition.onresult = (e) => {
+        const transcript = e.results[0][0].transcript;
+        const input = document.getElementById('chatInput');
+        input.value = (input.value ? input.value + " " : "") + transcript;
+      };
+
+      recognition.onerror = () => {
+        isRecording = false;
+        micBtn.classList.remove('active-mic');
+      };
+
+      recognition.onend = () => {
+        isRecording = false;
+        micBtn.classList.remove('active-mic');
+        if (document.getElementById('chatInput').value.trim()) {
+          sendChat();
+        }
+      };
+
+      recognition.start();
     }
 
     async function sendChat() {
@@ -403,15 +519,31 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       const text = input.value.trim();
       const sendBtn = document.getElementById('sendBtn');
       const stream = document.getElementById('chatStream');
-      if (!text) return;
+      const imgPayload = attachedImageBase64;
+
+      if (!text && !imgPayload) return;
 
       const userBubble = document.createElement('div');
       userBubble.className = 'msg msg-user';
-      userBubble.innerText = text;
+      if (imgPayload) {
+        userBubble.innerHTML = `<img src="${imgPayload}" style="max-width:180px; max-height:140px; border-radius:6px; margin-bottom:6px; display:block;">` + (text ? `<div>${text}</div>` : '');
+      } else {
+        userBubble.innerText = text;
+      }
       stream.appendChild(userBubble);
 
-      chatHistory.push({ role: "user", parts: [{ text: text }] });
+      const turnParts = [];
+      if (imgPayload) {
+        const [meta, b64] = imgPayload.split(',');
+        turnParts.push({ inline_data: { mime_type: "image/jpeg", data: b64 } });
+      }
+      if (text) {
+        turnParts.push({ text: text });
+      }
+
+      chatHistory.push({ role: "user", parts: turnParts });
       input.value = "";
+      clearAttachedImage();
       sendBtn.disabled = true;
 
       const botBubble = document.createElement('div');
@@ -715,9 +847,9 @@ def ask():
         "system_instruction": {
             "parts": [{
                 "text": (
-                    f"You are Gelo, a high-speed AI companion. The user's name is {display_name}. "
+                    f"You are Gelo, an elite conversational AI companion. The user's name is {display_name}. "
                     f"The current reference time is {now_utc}. "
-                    "Respond with speed, high intelligence, and elegant precision in clean markdown."
+                    "Respond with high intelligence, swiftness, and clean markdown."
                 )
             }]
         },
@@ -729,12 +861,12 @@ def ask():
     }
 
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
-
     last_error = "Server busy."
-    for model in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"]:
+
+    for model in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            res = requests.post(url, headers=headers, json=payload, timeout=15)
+            res = requests.post(url, headers=headers, json=payload, timeout=16)
             data = res.json()
             if "candidates" in data and data["candidates"]:
                 parts = data["candidates"][0]["content"]["parts"]
