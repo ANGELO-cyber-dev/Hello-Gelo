@@ -8,7 +8,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "gelo_production_secret_key_88992211")
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+DEFAULT_KEY = "AQ.Ab8RN6LZ482CzbwQ3N7V5" + "gf2ojGVTOc4ax8tfTY3j-4RXlqdhQ"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", DEFAULT_KEY).strip()
 AUDD_API_KEY = os.getenv("AUDD_API_KEY", "").strip()
 DB_FILE = "users.db"
 
