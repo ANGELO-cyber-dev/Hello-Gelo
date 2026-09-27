@@ -742,21 +742,30 @@ HTML_PAGE = """<!DOCTYPE html>
     async function startShazam() {
       const status = document.getElementById('radarStatus');
       const container = document.getElementById('pulseContainer');
-      document.getElementById('resultSlot').innerHTML = "";
+      const resultSlot = document.getElementById('resultSlot');
+      if (resultSlot) resultSlot.innerHTML = "";
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        document.getElementById('filePicker').click();
+        status.innerText = "Mic not supported. Use file upload.";
         return;
       }
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: { echoCancellation: true, noiseSuppression: true } 
+        });
         startVisualizer(stream);
 
-        let mimeType = 'audio/webm';
-        if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+        let mimeType = '';
+        if (typeof MediaRecorder !== 'undefined') {
+          if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus';
+          else if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
+          else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+          else if (MediaRecorder.isTypeSupported('audio/aac')) mimeType = 'audio/aac';
+        }
 
-        const mediaRecorder = new MediaRecorder(stream);
+        const options = mimeType ? { mimeType } : {};
+        const mediaRecorder = new MediaRecorder(stream, options);
         const audioChunks = [];
 
         mediaRecorder.ondataavailable = e => {
@@ -764,7 +773,8 @@ HTML_PAGE = """<!DOCTYPE html>
         };
 
         mediaRecorder.onstop = () => {
-          const audioBlob = new Blob(audioChunks, { type: mimeType });
+          const finalMime = mimeType || 'audio/webm';
+          const audioBlob = new Blob(audioChunks, { type: finalMime });
           uploadAudio(audioBlob);
         };
 
@@ -779,14 +789,18 @@ HTML_PAGE = """<!DOCTYPE html>
             status.innerText = `Listening... (${secondsLeft}s)`;
           } else {
             clearInterval(timer);
-            mediaRecorder.stop();
+            if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
             stream.getTracks().forEach(t => t.stop());
           }
         }, 1000);
       } catch (err) {
         container.classList.remove('is-listening');
         stopVisualizer();
-        document.getElementById('filePicker').click();
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          status.innerHTML = `<span style="color:#f87171;">Mic permission denied. Allow mic in browser settings.</span>`;
+        } else {
+          status.innerHTML = `<span style="color:#f87171;">Mic error: ${err.message}</span>`;
+        }
       }
     }
   </script>
