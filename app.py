@@ -1481,13 +1481,8 @@ def ask_stream():
                             continue
             yield "data: [DONE]\\n\\n"
 
-            thought_match = re.search(r'<thought>(.*?)</thought>', full_text, re.DOTALL)
-            if thought_match:
-                thinking = thought_match.group(1).strip()
-                final_answer = re.sub(r'<thought>.*?</thought>', '', full_text, flags=re.DOTALL).strip()
-            else:
-                thinking = None
-                final_answer = full_text.strip()
+            thinking = None
+            final_answer = full_text.strip()
 
             c_conn = sqlite3.connect(DB_FILE)
             c_cur = c_conn.cursor()
@@ -1551,14 +1546,17 @@ def ask_fast():
         "system_instruction": {
             "parts": [{
                 "text": (
-                    f"You are Gelo, a high-precision AI collaborator. The user's name is {display_name}. "
-                    f"The current reference time is {now_utc}. Engage with concise clarity. "
-                    "Conduct your step-by-step reasoning process enclosed in <thought>...</thought> tags, "
-                    "then deliver your clean final response outside the tags in clean markdown."
+                    f"You are Gelo, a high-speed, elite AI collaborator. The user's name is {display_name}. "
+                    f"The current reference time is {now_utc}. "
+                    "Respond immediately with precision, elegance, and zero delay in clean markdown."
                 )
             }]
         },
-        "contents": contents
+        "contents": contents,
+        "generationConfig": {
+            "temperature": 0.6,
+            "maxOutputTokens": 1024
+        }
     }
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"
@@ -1569,13 +1567,8 @@ def ask_fast():
         data = res.json()
         if "candidates" in data and data["candidates"]:
             full_text = data["candidates"][0]["content"]["parts"][0]["text"]
-            thought_match = re.search(r'<thought>(.*?)</thought>', full_text, re.DOTALL)
-            if thought_match:
-                thinking = thought_match.group(1).strip()
-                final_answer = re.sub(r'<thought>.*?</thought>', '', full_text, flags=re.DOTALL).strip()
-            else:
-                thinking = None
-                final_answer = full_text.strip()
+            thinking = None
+            final_answer = full_text.strip()
 
             c.execute("INSERT INTO messages (username, role, text, thinking) VALUES (?, ?, ?, ?)",
                       (username, "model", final_answer, thinking))
