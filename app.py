@@ -452,7 +452,7 @@ HTML_PAGE = """<!DOCTYPE html>
   </div>
 
   <div class="tab-bar">
-    <button class="tab-btn active" id="tabBrain" onclick="switchView('brain')">💬 Brain Chat</button>
+    <button class="tab-btn active" id="tabBrain" onclick="switchView('brain')">💬 Ask Gelo</button>
     <button class="tab-btn" id="tabMusic" onclick="switchView('music')">🎵 Music Search</button>
   </div>
 
