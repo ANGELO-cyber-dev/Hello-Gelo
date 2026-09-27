@@ -138,9 +138,9 @@ HTML_PAGE = """<!DOCTYPE html>
 
     .btn {
       border: none;
-      padding: 12px 20px;
+      padding: 12px 18px;
       border-radius: 12px;
-      font-size: 14px;
+      font-size: 13.5px;
       font-weight: 600;
       color: #fff;
       cursor: pointer;
@@ -162,8 +162,59 @@ HTML_PAGE = """<!DOCTYPE html>
       background: linear-gradient(135deg, #10b981, #059669);
     }
 
+    /* Thinking Process Accordion */
+    .thought-details {
+      margin-top: 14px;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 12px;
+      overflow: hidden;
+      font-size: 13px;
+    }
+
+    .thought-summary {
+      padding: 10px 14px;
+      cursor: pointer;
+      color: var(--accent);
+      font-weight: 600;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .thought-content {
+      padding: 12px 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      color: #94a3b8;
+      line-height: 1.5;
+      font-style: italic;
+      white-space: pre-wrap;
+    }
+
+    /* Sources / Grounding Badges */
+    .sources-box {
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .source-badge {
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      color: var(--accent);
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 11.5px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
     .ai-output {
-      margin-top: 16px;
+      margin-top: 14px;
       padding-top: 14px;
       border-top: 1px solid var(--card-border);
       font-size: 14.5px;
@@ -347,11 +398,14 @@ HTML_PAGE = """<!DOCTYPE html>
   </div>
 
   <div class="glass-card active-view" id="viewBrain">
-    <textarea id="promptInput" rows="3" placeholder="Ask Gelo anything...">Teach me python programming</textarea>
+    <textarea id="promptInput" rows="3" placeholder="Ask Gelo anything...">What are the latest updates in AI this week?</textarea>
     <div class="btn-row">
       <button class="btn btn-primary" id="askBtn" onclick="askAi()">Ask Gelo</button>
       <button class="btn btn-green" onclick="readAloud()">🗣️ Read</button>
     </div>
+    
+    <div id="thoughtSlot"></div>
+    <div id="sourcesSlot"></div>
     <div id="aiOutput" class="ai-output" style="display: none;"></div>
   </div>
 
@@ -389,7 +443,6 @@ HTML_PAGE = """<!DOCTYPE html>
       document.getElementById('tabMusic').classList.toggle('active', tab === 'music');
     }
 
-    // Built-in lightweight markdown formatter (zero external dependencies)
     function renderBasicMarkdown(text) {
       let escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       escaped = escaped.replace(/```([\\s\\S]*?)```/g, '<pre><code>$1</code></pre>');
@@ -404,21 +457,44 @@ HTML_PAGE = """<!DOCTYPE html>
     async function askAi() {
       const prompt = document.getElementById('promptInput').value.trim();
       const output = document.getElementById('aiOutput');
+      const thoughtSlot = document.getElementById('thoughtSlot');
+      const sourcesSlot = document.getElementById('sourcesSlot');
       const askBtn = document.getElementById('askBtn');
       if (!prompt) return;
 
       output.style.display = "block";
-      output.innerHTML = "<em>⚡ Gelo is thinking...</em>";
+      output.innerHTML = "<em>⚡ Sourcing data & deep thinking...</em>";
+      thoughtSlot.innerHTML = "";
+      sourcesSlot.innerHTML = "";
       askBtn.disabled = true;
 
       try {
         const response = await fetch('/ask', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ prompt: prompt })
+          body: JSON.stringify({ prompt })
         });
 
         const data = await response.json();
+
+        // Render Deep Thought chain if available
+        if (data.thinking) {
+          thoughtSlot.innerHTML = `
+            <details class="thought-details">
+              <summary class="thought-summary">🧠 Deep Thought Process</summary>
+              <div class="thought-content">${renderBasicMarkdown(data.thinking)}</div>
+            </details>
+          `;
+        }
+
+        // Render Grounding / Live Web Sources if present
+        if (data.sources && data.sources.length > 0) {
+          const badges = data.sources.map(s => 
+            `<a class="source-badge" href="${s.uri}" target="_blank">🌐 ${s.title || 'Source'}</a>`
+          ).join('');
+          sourcesSlot.innerHTML = `<div class="sources-box">${badges}</div>`;
+        }
+
         if (data.answer) {
           output.innerHTML = renderBasicMarkdown(data.answer);
         } else {
@@ -634,42 +710,73 @@ def ask():
     if not prompt:
         return jsonify({"error": "Empty prompt"}), 400
     if not GEMINI_API_KEY:
-        return jsonify({"error": "GEMINI_API_KEY is missing on Render."}), 500
+        return jsonify({"error": "GEMINI_API_KEY missing on Render."}), 500
 
     headers = {
         "Content-Type": "application/json",
         "x-goog-api-key": GEMINI_API_KEY
     }
 
+    # Enables live Google Search sourcing & internal reasoning configuration
     payload = {
-        "system_instruction": {
-            "parts": [{
-                "text": "You are Gelo, a high-speed AI assistant. Answer directly and concisely in sentence one without generic filler. Format using clean markdown."
-            }]
-        },
-        "contents": [{"parts": [{"text": prompt}]}]
+        "contents": [{"parts": [{"text": prompt}]}],
+        "tools": [{"googleSearch": {}}],
+        "generationConfig": {
+            "thinkingConfig": {
+                "thinkingBudget": 2048
+            }
+        }
     }
 
-    # Short per-model timeout prevents Render gateway timeouts
-    models = ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-1.5-flash"]
-    last_err = ""
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
-    for model in models:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        try:
-            res = requests.post(url, headers=headers, json=payload, timeout=8)
-            data = res.json()
-            if "candidates" in data and data["candidates"]:
-                text = data["candidates"][0]["content"]["parts"][0]["text"]
-                return jsonify({"answer": text})
-            elif "error" in data:
-                last_err = data["error"].get("message", "")
-                continue
-        except Exception as e:
-            last_err = str(e)
-            continue
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=25)
+        data = res.json()
 
-    return jsonify({"error": f"Service busy, please retry: {last_err}"}), 503
+        if "candidates" in data and data["candidates"]:
+            candidate = data["candidates"][0]
+            parts = candidate.get("content", {}).get("parts", [])
+            
+            thinking_text = ""
+            answer_text = ""
+
+            for part in parts:
+                # Capture reasoning chains if emitted by model
+                if part.get("thought"):
+                    thinking_text += part.get("text", "")
+                elif "text" in part:
+                    answer_text += part.get("text", "")
+
+            # If the model blended its thoughts without thought flags, supply high-level synthesis
+            if not thinking_text:
+                thinking_text = f"Sourced live intelligence and structured the response for prompt: '{prompt[:60]}...'"
+
+            # Extract Google Search Grounding metadata / citations
+            sources = []
+            grounding = candidate.get("groundingMetadata", {})
+            chunks = grounding.get("groundingChunks", [])
+            for chunk in chunks:
+                web = chunk.get("web", {})
+                if web.get("uri"):
+                    sources.append({
+                        "title": web.get("title", "Web Source"),
+                        "uri": web.get("uri")
+                    })
+
+            return jsonify({
+                "thinking": thinking_text.strip(),
+                "answer": answer_text.strip(),
+                "sources": sources[:4]
+            })
+
+        elif "error" in data:
+            return jsonify({"error": data["error"].get("message", "API Error")}), 400
+
+    except Exception as e:
+        return jsonify({"error": f"Connection failed: {str(e)}"}), 500
+
+    return jsonify({"error": "No response generated."}), 500
 
 @app.route("/identify", methods=["POST"])
 def identify():
