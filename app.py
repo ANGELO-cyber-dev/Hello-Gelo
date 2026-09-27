@@ -163,7 +163,6 @@ HTML_PAGE = """<!DOCTYPE html>
       background: linear-gradient(135deg, #10b981, #059669);
     }
 
-    /* Thinking Process Accordion */
     .thought-details {
       margin-top: 14px;
       background: rgba(15, 23, 42, 0.7);
@@ -299,9 +298,15 @@ HTML_PAGE = """<!DOCTYPE html>
       padding: 14px;
       margin-top: 18px;
       display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .track-main {
+      display: flex;
       align-items: center;
       gap: 14px;
-      width: 100%;
     }
 
     .track-artwork {
@@ -343,6 +348,37 @@ HTML_PAGE = """<!DOCTYPE html>
       background: #0284c7;
     }
 
+    /* Lyrics Accordion */
+    .lyrics-drawer {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .lyrics-summary {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      padding: 8px 12px;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .lyrics-body {
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: #cbd5e1;
+      padding: 10px 12px;
+      max-height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
     .history-section {
       width: 100%;
       margin-top: 20px;
@@ -377,7 +413,7 @@ HTML_PAGE = """<!DOCTYPE html>
   </div>
 
   <div class="glass-card active-view" id="viewBrain">
-    <textarea id="promptInput" rows="3" placeholder="Ask Gelo anything...">What are the latest updates in AI this week?</textarea>
+    <textarea id="promptInput" rows="3" placeholder="Ask Gelo anything...">Teach me python programming</textarea>
     <div class="btn-row">
       <button class="btn btn-primary" id="askBtn" onclick="askAi()">Ask Gelo</button>
       <button class="btn btn-green" onclick="readAloud()">🗣️ Read</button>
@@ -497,18 +533,34 @@ HTML_PAGE = """<!DOCTYPE html>
       const coverUrl = getCover(track);
       const spotify = track.spotify ? track.spotify.external_urls.spotify : null;
       const apple = track.apple_music ? track.apple_music.url : null;
+      const lyrics = track.lyrics ? track.lyrics.lyrics : null;
 
       slot.innerHTML = `
         <div class="track-result-card">
-          <img class="track-artwork" src="${coverUrl}" alt="Artwork">
-          <div class="track-meta">
-            <div class="track-name">${track.title}</div>
-            <div class="track-artist">${track.artist}</div>
-            <div class="store-badges">
-              ${spotify ? `<a class="store-badge" href="${spotify}" target="_blank">Spotify</a>` : ''}
-              ${apple ? `<a class="store-badge" href="${apple}" target="_blank">Apple Music</a>` : ''}
+          <div class="track-main">
+            <img class="track-artwork" src="${coverUrl}" alt="Artwork">
+            <div class="track-meta">
+              <div class="track-name">${track.title}</div>
+              <div class="track-artist">${track.artist}</div>
+              <div class="store-badges">
+                ${spotify ? `<a class="store-badge" href="${spotify}" target="_blank">Spotify</a>` : ''}
+                ${apple ? `<a class="store-badge" href="${apple}" target="_blank">Apple Music</a>` : ''}
+              </div>
             </div>
           </div>
+          ${lyrics ? `
+            <details class="lyrics-drawer">
+              <summary class="lyrics-summary">📜 Lyrics Preview</summary>
+              <div class="lyrics-body">${lyrics}</div>
+            </details>
+          ` : `
+            <details class="lyrics-drawer">
+              <summary class="lyrics-summary">📜 Search Lyrics Online</summary>
+              <div class="lyrics-body" style="color: #94a3b8; font-style: italic;">
+                Lyrics not directly in database. You can find the full licensed lyrics by searching for "${track.title} by${track.artist}" on Google or opening Spotify / Apple Music.
+              </div>
+            </details>
+          `}
         </div>
       `;
       saveHistory(track);
@@ -537,13 +589,15 @@ HTML_PAGE = """<!DOCTYPE html>
       }
       list.innerHTML = history.map(item => `
         <div class="track-result-card" style="margin-top: 8px; padding: 10px;">
-          <img class="track-artwork" style="width: 44px; height: 44px;" src="${item.cover}">
-          <div class="track-meta">
-            <div class="track-name" style="font-size: 13.5px;">${item.title}</div>
-            <div class="track-artist" style="font-size: 12px;">${item.artist}</div>
-            <div class="store-badges">
-              ${item.spotify ? `<a class="store-badge" style="font-size: 10px; padding: 2px 7px;" href="${item.spotify}" target="_blank">Spotify</a>` : ''}
-              ${item.apple ? `<a class="store-badge" style="font-size: 10px; padding: 2px 7px;" href="${item.apple}" target="_blank">Apple</a>` : ''}
+          <div class="track-main">
+            <img class="track-artwork" style="width: 44px; height: 44px;" src="${item.cover}">
+            <div class="track-meta">
+              <div class="track-name" style="font-size: 13.5px;">${item.title}</div>
+              <div class="track-artist" style="font-size: 12px;">${item.artist}</div>
+              <div class="store-badges">
+                ${item.spotify ? `<a class="store-badge" style="font-size: 10px; padding: 2px 7px;" href="${item.spotify}" target="_blank">Spotify</a>` : ''}
+                ${item.apple ? `<a class="store-badge" style="font-size: 10px; padding: 2px 7px;" href="${item.apple}" target="_blank">Apple</a>` : ''}
+              </div>
             </div>
           </div>
         </div>
@@ -589,7 +643,7 @@ HTML_PAGE = """<!DOCTYPE html>
       if (!file) return;
       const status = document.getElementById('radarStatus');
       const container = document.getElementById('pulseContainer');
-      status.innerText = "Searching database...";
+      status.innerText = "Searching database & lyrics...";
       container.classList.remove('is-listening');
       stopVisualizer();
 
@@ -684,7 +738,6 @@ def ask():
         "x-goog-api-key": GEMINI_API_KEY
     }
 
-    # Free-tier compliant system prompt that executes Deep Thinking via structured reasoning
     payload = {
         "system_instruction": {
             "parts": [{
@@ -713,7 +766,6 @@ def ask():
             if "candidates" in data and data["candidates"]:
                 raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
                 
-                # Parse thought tags
                 thought_match = re.search(r'<thought>(.*?)</thought>', raw_text, re.DOTALL)
                 if thought_match:
                     thinking = thought_match.group(1).strip()
@@ -740,7 +792,8 @@ def identify():
     if "file" not in request.files:
         return jsonify({"error": {"error_message": "Missing audio file"}}), 400
     file = request.files["file"]
-    data = {"api_token": AUDD_API_KEY, "return": "apple_music,spotify"}
+    # Request lyrics along with Apple Music and Spotify links
+    data = {"api_token": AUDD_API_KEY, "return": "apple_music,spotify,lyrics"}
     try:
         res = requests.post("https://api.audd.io/", data=data, files={"file": file.read()}, timeout=25)
         return jsonify(res.json())
