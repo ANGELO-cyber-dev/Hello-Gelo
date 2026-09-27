@@ -5,7 +5,7 @@ import base64
 import sqlite3
 from datetime import datetime, timezone
 import requests
-from flask import Flask, request, jsonify, make_response, session, redirect, Response, stream_with_context
+from flask import Flask, request, jsonify, make_response, session, redirect, Response, stream_with_context, render_template_string
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
@@ -277,7 +277,6 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       padding: 10px 8px 12px;
     }
 
-    /* Top Classic App Bar */
     .app-header {
       width: 100%;
       max-width: 480px;
@@ -334,7 +333,6 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       cursor: pointer;
     }
 
-    /* Classic Tab Segment */
     .tab-segment {
       width: 100%;
       max-width: 480px;
@@ -365,7 +363,6 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       box-shadow: 0 2px 6px rgba(0,0,0,0.4);
     }
 
-    /* Primary Workspace */
     .main-workspace {
       width: 100%;
       max-width: 480px;
@@ -415,7 +412,6 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       text-decoration: underline;
     }
 
-    /* Action Chips */
     .action-chips-container {
       display: flex;
       gap: 6px;
@@ -438,7 +434,6 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
     }
     .action-chip:active { background: #1c2230; }
 
-    /* Stream Feed */
     .stream-feed {
       flex: 1;
       overflow-y: auto;
@@ -490,7 +485,6 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
     }
     .feed-bot pre code { background: transparent; padding: 0; }
 
-    /* Reasoning Box */
     .reasoning-panel {
       margin-bottom: 8px;
       background: #0b0d13;
@@ -516,7 +510,6 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       line-height: 1.5;
     }
 
-    /* Classical Input Dock */
     .input-dock {
       padding: 8px;
       background: #0c0e14;
@@ -580,7 +573,6 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       border: 1px solid var(--surface-border);
     }
 
-    /* Radar Classical Deck */
     .radar-deck {
       display: flex;
       flex-direction: column;
@@ -665,7 +657,6 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       border: 1px solid var(--surface-border);
     }
 
-    /* Modal */
     .classic-modal {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -746,7 +737,6 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
     <button class="tab-btn" id="tabMusic" onclick="switchView('music')">Music Radar</button>
   </nav>
 
-  <!-- Conversational Brain View -->
   <main class="main-workspace active-view" id="viewBrain">
     <div class="workspace-subbar">
       <div class="status-indicator">
@@ -764,21 +754,23 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
     </div>
 
     <div class="stream-feed" id="chatStream">
-      {% for msg in history %}
-        <div class="feed-bubble {% if msg.role == 'user' %}feed-user{% else %}feed-bot{% endif %}">
-          {% if msg.thinking %}
-            <details class="reasoning-panel">
-              <summary class="reasoning-trigger">🧠 Thought Chain</summary>
-              <div class="reasoning-body">{{ msg.thinking }}</div>
-            </details>
-          {% endif %}
-          <div class="bubble-content">{{ msg.text }}</div>
-        </div>
+      {% if history %}
+        {% for msg in history %}
+          <div class="feed-bubble {% if msg.role == 'user' %}feed-user{% else %}feed-bot{% endif %}">
+            {% if msg.thinking %}
+              <details class="reasoning-panel">
+                <summary class="reasoning-trigger">🧠 Thought Chain</summary>
+                <div class="reasoning-body">{{ msg.thinking }}</div>
+              </details>
+            {% endif %}
+            <div class="bubble-content">{{ msg.text }}</div>
+          </div>
+        {% endfor %}
       {% else %}
         <div class="feed-bubble feed-bot">
           Good day, {{ display_name }}. What inquiry or project are we tackling today?
         </div>
-      {% endfor %}
+      {% endif %}
     </div>
 
     <div class="image-preview-bar" id="previewTray">
@@ -796,7 +788,6 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
     </div>
   </main>
 
-  <!-- Music Recognition View -->
   <section class="main-workspace" id="viewMusic">
     <div class="radar-deck">
       <div class="radar-core-container" id="pulseContainer">
@@ -817,7 +808,6 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
     </div>
   </section>
 
-  <!-- Preferences Modal -->
   <div class="classic-modal" id="settingsModal">
     <div class="modal-box">
       <div class="modal-header">
@@ -1033,7 +1023,7 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
               const payload = line.replace('data: ', '').trim();
               if (payload === '[DONE]') continue;
               try {
-                const parsed = jsonParse(payload);
+                const parsed = JSON.parse(payload);
                 const delta = parsed.delta || '';
 
                 if (delta.includes('<thought>')) {
@@ -1069,10 +1059,6 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
         sendBtn.disabled = false;
         stream.scrollTop = stream.scrollHeight;
       }
-    }
-
-    function jsonParse(str) {
-      return JSON.parse(str);
     }
 
     function getCover(track) {
@@ -1358,7 +1344,7 @@ def logout():
     session.pop("display_name", None)
     return redirect("/login")
 
-# --- PROTECTED APP ROUTES ---
+# --- PROTECTED APP ROUTE ---
 @app.route("/")
 def index():
     if "user" not in session:
@@ -1373,24 +1359,7 @@ def index():
 
     history = [{"role": r[0], "text": r[1], "thinking": r[2]} for r in rows]
 
-    rendered = MAIN_TEMPLATE.replace("{{ display_name }}", display_name)
-    if history:
-        rendered = rendered.replace("{% for msg in history %}", "")
-        rendered = rendered.replace("{% else %}", "<!--")
-        rendered = rendered.replace("{% endfor %}", "-->")
-        items_html = ""
-        for m in history:
-            cls = "feed-user" if m["role"] == "user" else "feed-bot"
-            th_block = ""
-            if m["thinking"]:
-                th_block = f'<details class="reasoning-panel"><summary class="reasoning-trigger">🧠 Thought Chain</summary><div class="reasoning-body">{m["thinking"]}</div></details>'
-            items_html += f'<div class="feed-bubble {cls}">{th_block}<div class="bubble-content">{m["text"]}</div></div>'
-        rendered = re.sub(r'<div class="stream-feed" id="chatStream">[\s\S]*?</div>', f'<div class="stream-feed" id="chatStream">{items_html}</div>', rendered, count=1)
-    else:
-        rendered = rendered.replace("{% for msg in history %}", "<!--")
-        rendered = rendered.replace("{% else %}", "-->")
-        rendered = rendered.replace("{% endfor %}", "")
-
+    rendered = render_template_string(MAIN_TEMPLATE, display_name=display_name, history=history)
     resp = make_response(rendered)
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return resp
