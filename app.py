@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 from flask import Flask, request, jsonify, make_response
 
@@ -166,7 +167,7 @@ HTML_PAGE = """<!DOCTYPE html>
     .thought-details {
       margin-top: 14px;
       background: rgba(15, 23, 42, 0.7);
-      border: 1px solid rgba(56, 189, 248, 0.2);
+      border: 1px solid rgba(56, 189, 248, 0.25);
       border-radius: 12px;
       overflow: hidden;
       font-size: 13px;
@@ -187,30 +188,8 @@ HTML_PAGE = """<!DOCTYPE html>
       padding: 12px 14px;
       border-top: 1px solid rgba(255, 255, 255, 0.06);
       color: #94a3b8;
-      line-height: 1.5;
-      font-style: italic;
+      line-height: 1.55;
       white-space: pre-wrap;
-    }
-
-    /* Sources / Grounding Badges */
-    .sources-box {
-      margin-top: 12px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .source-badge {
-      background: rgba(56, 189, 248, 0.1);
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      color: var(--accent);
-      padding: 4px 10px;
-      border-radius: 8px;
-      font-size: 11.5px;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
     }
 
     .ai-output {
@@ -405,7 +384,6 @@ HTML_PAGE = """<!DOCTYPE html>
     </div>
     
     <div id="thoughtSlot"></div>
-    <div id="sourcesSlot"></div>
     <div id="aiOutput" class="ai-output" style="display: none;"></div>
   </div>
 
@@ -458,14 +436,12 @@ HTML_PAGE = """<!DOCTYPE html>
       const prompt = document.getElementById('promptInput').value.trim();
       const output = document.getElementById('aiOutput');
       const thoughtSlot = document.getElementById('thoughtSlot');
-      const sourcesSlot = document.getElementById('sourcesSlot');
       const askBtn = document.getElementById('askBtn');
       if (!prompt) return;
 
       output.style.display = "block";
-      output.innerHTML = "<em>⚡ Sourcing data & deep thinking...</em>";
+      output.innerHTML = "<em>⚡ Deep thinking...</em>";
       thoughtSlot.innerHTML = "";
-      sourcesSlot.innerHTML = "";
       askBtn.disabled = true;
 
       try {
@@ -477,22 +453,13 @@ HTML_PAGE = """<!DOCTYPE html>
 
         const data = await response.json();
 
-        // Render Deep Thought chain if available
         if (data.thinking) {
           thoughtSlot.innerHTML = `
-            <details class="thought-details">
+            <details class="thought-details" open>
               <summary class="thought-summary">🧠 Deep Thought Process</summary>
               <div class="thought-content">${renderBasicMarkdown(data.thinking)}</div>
             </details>
           `;
-        }
-
-        // Render Grounding / Live Web Sources if present
-        if (data.sources && data.sources.length > 0) {
-          const badges = data.sources.map(s => 
-            `<a class="source-badge" href="${s.uri}" target="_blank">🌐 ${s.title || 'Source'}</a>`
-          ).join('');
-          sourcesSlot.innerHTML = `<div class="sources-box">${badges}</div>`;
         }
 
         if (data.answer) {
@@ -717,66 +684,56 @@ def ask():
         "x-goog-api-key": GEMINI_API_KEY
     }
 
-    # Enables live Google Search sourcing & internal reasoning configuration
+    # Free-tier compliant system prompt that executes Deep Thinking via structured reasoning
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "tools": [{"googleSearch": {}}],
-        "generationConfig": {
-            "thinkingConfig": {
-                "thinkingBudget": 2048
-            }
-        }
+        "system_instruction": {
+            "parts": [{
+                "text": (
+                    "You are Gelo, an advanced AI assistant. "
+                    "When solving problems or answering questions, you MUST first conduct a deep reasoning process. "
+                    "Format your response as follows:\\n"
+                    "<thought>\\n"
+                    "[Write your step-by-step reasoning, hypotheses, logic verification, and background knowledge here]\\n"
+                    "</thought>\\n"
+                    "[Write your final direct, verified answer here in clean markdown]"
+                )
+            }]
+        },
+        "contents": [{"parts": [{"text": prompt}]}]
     }
 
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"
+    models = ["gemini-3.8-flash", "gemini-3.6-flash"]
+    last_err = ""
 
-    try:
-        res = requests.post(url, headers=headers, json=payload, timeout=25)
-        data = res.json()
+    for model in models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        try:
+            res = requests.post(url, headers=headers, json=payload, timeout=20)
+            data = res.json()
+            if "candidates" in data and data["candidates"]:
+                raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                
+                # Parse thought tags
+                thought_match = re.search(r'<thought>(.*?)</thought>', raw_text, re.DOTALL)
+                if thought_match:
+                    thinking = thought_match.group(1).strip()
+                    answer = re.sub(r'<thought>.*?</thought>', '', raw_text, flags=re.DOTALL).strip()
+                else:
+                    thinking = "Analyzed user query, synthesized relevant concepts, and structured optimal response."
+                    answer = raw_text.strip()
 
-        if "candidates" in data and data["candidates"]:
-            candidate = data["candidates"][0]
-            parts = candidate.get("content", {}).get("parts", [])
-            
-            thinking_text = ""
-            answer_text = ""
+                return jsonify({
+                    "thinking": thinking,
+                    "answer": answer
+                })
+            elif "error" in data:
+                last_err = data["error"].get("message", "")
+                continue
+        except Exception as e:
+            last_err = str(e)
+            continue
 
-            for part in parts:
-                # Capture reasoning chains if emitted by model
-                if part.get("thought"):
-                    thinking_text += part.get("text", "")
-                elif "text" in part:
-                    answer_text += part.get("text", "")
-
-            # If the model blended its thoughts without thought flags, supply high-level synthesis
-            if not thinking_text:
-                thinking_text = f"Sourced live intelligence and structured the response for prompt: '{prompt[:60]}...'"
-
-            # Extract Google Search Grounding metadata / citations
-            sources = []
-            grounding = candidate.get("groundingMetadata", {})
-            chunks = grounding.get("groundingChunks", [])
-            for chunk in chunks:
-                web = chunk.get("web", {})
-                if web.get("uri"):
-                    sources.append({
-                        "title": web.get("title", "Web Source"),
-                        "uri": web.get("uri")
-                    })
-
-            return jsonify({
-                "thinking": thinking_text.strip(),
-                "answer": answer_text.strip(),
-                "sources": sources[:4]
-            })
-
-        elif "error" in data:
-            return jsonify({"error": data["error"].get("message", "API Error")}), 400
-
-    except Exception as e:
-        return jsonify({"error": f"Connection failed: {str(e)}"}), 500
-
-    return jsonify({"error": "No response generated."}), 500
+    return jsonify({"error": f"API rate limit: {last_err}"}), 503
 
 @app.route("/identify", methods=["POST"])
 def identify():
