@@ -42,7 +42,7 @@ AUTH_TEMPLATE = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>HELLO Gelo — Access</title>
+  <title>Gelo ai — Access</title>
   <style>
     :root {
       --bg: #090a0f;
@@ -102,7 +102,7 @@ AUTH_TEMPLATE = """<!DOCTYPE html>
 <body>
   <div class="brand">
     <span class="brand-mark">⚡</span>
-    <span class="brand-title">HELLO Gelo</span>
+    <span class="brand-title">Gelo ai</span>
   </div>
 
   <div class="auth-card">
@@ -179,7 +179,7 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>HELLO Gelo</title>
+  <title>Gelo ai</title>
   <style>
     :root {
       --bg: #090a0f;
@@ -349,7 +349,7 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
   <div class="top-bar">
     <div class="brand">
       <span class="brand-icon">⚡</span>
-      <span class="brand-title">HELLO Gelo</span>
+      <span class="brand-title">Gelo ai</span>
     </div>
     <div class="user-pill">
       <span>{{ display_name }}</span>
