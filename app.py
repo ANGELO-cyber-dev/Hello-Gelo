@@ -441,7 +441,7 @@ HTML_PAGE = """<!DOCTYPE html>
       margin-bottom: 8px;
     }
 
-    #filePicker { display: none; }
+    
   </style>
 </head>
 <body>
@@ -484,8 +484,8 @@ HTML_PAGE = """<!DOCTYPE html>
         <button class="radar-btn" id="radarBtn" onclick="startShazam()">⚡</button>
       </div>
       <div class="radar-status" id="radarStatus">Tap to Search</div>
-      <div class="upload-link" onclick="document.getElementById('filePicker').click()">or choose an audio file</div>
-      <input type="file" id="filePicker" accept="audio/*" onchange="uploadAudio(this.files[0])">
+      
+      
       <div id="resultSlot" style="width: 100%;"></div>
 
       <div class="history-section">
