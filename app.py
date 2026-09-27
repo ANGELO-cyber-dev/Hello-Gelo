@@ -44,23 +44,23 @@ HTML_PAGE = """<!DOCTYPE html>
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 20px 16px 40px;
+      padding: 16px 12px 20px;
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin: 8px 0 20px;
+      gap: 8px;
+      margin: 4px 0 14px;
     }
 
     .brand-icon {
-      font-size: 26px;
+      font-size: 24px;
       filter: drop-shadow(0 0 12px var(--accent));
     }
 
     .brand-title {
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 800;
       letter-spacing: -0.5px;
       background: linear-gradient(135deg, #ffffff 30%, #38bdf8 100%);
@@ -73,10 +73,10 @@ HTML_PAGE = """<!DOCTYPE html>
       background: rgba(15, 23, 42, 0.85);
       border: 1px solid var(--card-border);
       padding: 4px;
-      border-radius: 14px;
+      border-radius: 12px;
       width: 100%;
-      max-width: 440px;
-      margin-bottom: 18px;
+      max-width: 480px;
+      margin-bottom: 12px;
     }
 
     .tab-btn {
@@ -84,8 +84,8 @@ HTML_PAGE = """<!DOCTYPE html>
       border: none;
       background: transparent;
       color: var(--text-muted);
-      padding: 10px 14px;
-      border-radius: 10px;
+      padding: 9px 12px;
+      border-radius: 9px;
       font-size: 13.5px;
       font-weight: 600;
       cursor: pointer;
@@ -104,119 +104,164 @@ HTML_PAGE = """<!DOCTYPE html>
     .glass-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 20px;
-      padding: 20px;
+      border-radius: 18px;
       width: 100%;
-      max-width: 440px;
+      max-width: 480px;
       display: none;
+      overflow: hidden;
     }
 
     .glass-card.active-view {
-      display: block;
-    }
-
-    textarea {
-      width: 100%;
-      background: rgba(8, 12, 22, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      color: var(--text);
-      padding: 14px;
-      border-radius: 14px;
-      font-size: 14.5px;
-      outline: none;
-      resize: vertical;
-      margin-bottom: 14px;
-    }
-
-    textarea:focus {
-      border-color: var(--accent);
-    }
-
-    .btn-row {
       display: flex;
-      gap: 10px;
+      flex-direction: column;
     }
 
-    .btn {
-      border: none;
-      padding: 12px 18px;
-      border-radius: 12px;
-      font-size: 13.5px;
-      font-weight: 600;
-      color: #fff;
-      cursor: pointer;
-      display: inline-flex;
+    /* Multi-turn Chat Container */
+    #viewBrain {
+      height: 78vh;
+      display: none;
+    }
+
+    #viewBrain.active-view {
+      display: flex;
+    }
+
+    .chat-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
       align-items: center;
-      justify-content: center;
-      gap: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-muted);
     }
 
-    .btn:active { transform: scale(0.97); }
-    .btn:disabled { opacity: 0.5; pointer-events: none; }
+    .chat-reset-btn {
+      color: #64748b;
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: underline;
+    }
 
-    .btn-primary {
+    .chat-stream {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      scroll-behavior: smooth;
+    }
+
+    .msg {
+      max-width: 88%;
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.55;
+      word-break: break-word;
+    }
+
+    .msg-user {
+      align-self: flex-end;
       background: linear-gradient(135deg, #2563eb, #1d4ed8);
-      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+      color: #fff;
+      border-bottom-right-radius: 4px;
     }
 
-    .btn-green {
-      background: linear-gradient(135deg, #10b981, #059669);
+    .msg-bot {
+      align-self: flex-start;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--card-border);
+      color: #e2e8f0;
+      border-bottom-left-radius: 4px;
+      width: 100%;
+      max-width: 95%;
+    }
+
+    .msg-bot strong { color: #fff; }
+    .msg-bot code {
+      background: rgba(0, 0, 0, 0.5);
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 13px;
+    }
+    .msg-bot pre {
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 8px 0;
+    }
+    .msg-bot pre code {
+      background: transparent;
+      padding: 0;
     }
 
     .thought-details {
-      margin-top: 14px;
-      background: rgba(15, 23, 42, 0.7);
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      border-radius: 12px;
+      margin-bottom: 8px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 8px;
       overflow: hidden;
-      font-size: 13px;
+      font-size: 12px;
     }
 
     .thought-summary {
-      padding: 10px 14px;
+      padding: 6px 10px;
       cursor: pointer;
       color: var(--accent);
       font-weight: 600;
       user-select: none;
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
 
     .thought-content {
-      padding: 12px 14px;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 8px 10px;
       color: #94a3b8;
-      line-height: 1.55;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
       white-space: pre-wrap;
     }
 
-    .ai-output {
-      margin-top: 14px;
-      padding-top: 14px;
+    .chat-input-bar {
+      padding: 10px;
       border-top: 1px solid var(--card-border);
-      font-size: 14.5px;
-      line-height: 1.65;
-      color: #cbd5e1;
-      white-space: pre-wrap;
-      word-break: break-word;
+      background: rgba(11, 15, 25, 0.95);
+      display: flex;
+      gap: 8px;
+      align-items: center;
     }
 
-    .ai-output strong { color: #fff; }
-    .ai-output code {
-      background: rgba(0, 0, 0, 0.5);
-      color: var(--accent);
-      padding: 2px 6px;
-      border-radius: 5px;
-      font-family: monospace;
+    .chat-input {
+      flex: 1;
+      background: rgba(18, 24, 38, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      outline: none;
     }
 
-    .error-box {
-      color: #f87171;
-      background: rgba(239, 68, 68, 0.1);
-      padding: 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(239, 68, 68, 0.2);
+    .chat-input:focus {
+      border-color: var(--accent);
+    }
+
+    .send-btn {
+      background: #2563eb;
+      border: none;
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .send-btn:disabled {
+      opacity: 0.5;
     }
 
     /* Radar View */
@@ -224,7 +269,7 @@ HTML_PAGE = """<!DOCTYPE html>
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 28px 0 16px;
+      padding: 24px 16px 20px;
     }
 
     .pulse-container {
@@ -348,7 +393,6 @@ HTML_PAGE = """<!DOCTYPE html>
       background: #0284c7;
     }
 
-    /* Lyrics Accordion */
     .lyrics-drawer {
       background: rgba(15, 23, 42, 0.6);
       border: 1px solid rgba(255, 255, 255, 0.06);
@@ -408,21 +452,30 @@ HTML_PAGE = """<!DOCTYPE html>
   </div>
 
   <div class="tab-bar">
-    <button class="tab-btn active" id="tabBrain" onclick="switchView('brain')">💬 Brain</button>
+    <button class="tab-btn active" id="tabBrain" onclick="switchView('brain')">💬 Brain Chat</button>
     <button class="tab-btn" id="tabMusic" onclick="switchView('music')">🎵 Music Search</button>
   </div>
 
+  <!-- MULTI-TURN CHAT VIEW -->
   <div class="glass-card active-view" id="viewBrain">
-    <textarea id="promptInput" rows="3" placeholder="Ask Gelo anything...">Teach me python programming</textarea>
-    <div class="btn-row">
-      <button class="btn btn-primary" id="askBtn" onclick="askAi()">Ask Gelo</button>
-      <button class="btn btn-green" onclick="readAloud()">🗣️ Read</button>
+    <div class="chat-header">
+      <span>AI Conversation</span>
+      <span class="chat-reset-btn" onclick="resetChat()">New Topic</span>
     </div>
     
-    <div id="thoughtSlot"></div>
-    <div id="aiOutput" class="ai-output" style="display: none;"></div>
+    <div class="chat-stream" id="chatStream">
+      <div class="msg msg-bot">
+        ⚡ Hi, I'm Gelo! What would you like to explore or learn today?
+      </div>
+    </div>
+
+    <div class="chat-input-bar">
+      <input type="text" class="chat-input" id="chatInput" placeholder="Reply or ask a question..." onkeydown="handleKey(event)">
+      <button class="send-btn" id="sendBtn" onclick="sendChat()">Send</button>
+    </div>
   </div>
 
+  <!-- MUSIC RECOGNITION VIEW -->
   <div class="glass-card" id="viewMusic">
     <div class="radar-wrapper">
       <div class="pulse-container" id="pulseContainer">
@@ -446,6 +499,7 @@ HTML_PAGE = """<!DOCTYPE html>
   </div>
 
   <script>
+    let chatHistory = [];
     let audioCtx, analyser, sourceNode, animFrame;
 
     document.addEventListener("DOMContentLoaded", renderHistory);
@@ -462,60 +516,81 @@ HTML_PAGE = """<!DOCTYPE html>
       escaped = escaped.replace(/```([\\s\\S]*?)```/g, '<pre><code>$1</code></pre>');
       escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
       escaped = escaped.replace(/\\*\\*([^\\*]+)\\*\\*/g, '<strong>$1</strong>');
-      escaped = escaped.replace(/^### (.*$)/gim, '<h3 style="color:#38bdf8; margin:8px 0;">$1</h3>');
-      escaped = escaped.replace(/^## (.*$)/gim, '<h2 style="color:#38bdf8; margin:10px 0;">$1</h2>');
-      escaped = escaped.replace(/^# (.*$)/gim, '<h1 style="color:#38bdf8; margin:12px 0;">$1</h1>');
-      return escaped;
+      escaped = escaped.replace(/^### (.*$)/gim, '<h3 style="color:#38bdf8; margin:6px 0;">$1</h3>');
+      escaped = escaped.replace(/^## (.*$)/gim, '<h2 style="color:#38bdf8; margin:8px 0;">$1</h2>');
+      escaped = escaped.replace(/^# (.*$)/gim, '<h1 style="color:#38bdf8; margin:10px 0;">$1</h1>');
+      escaped = escaped.replace(/^\\* (.*$)/gim, '• $1');
+      return escaped.replace(/\\n/g, '<br>');
     }
 
-    async function askAi() {
-      const prompt = document.getElementById('promptInput').value.trim();
-      const output = document.getElementById('aiOutput');
-      const thoughtSlot = document.getElementById('thoughtSlot');
-      const askBtn = document.getElementById('askBtn');
-      if (!prompt) return;
+    function handleKey(e) {
+      if (e.key === 'Enter') sendChat();
+    }
 
-      output.style.display = "block";
-      output.innerHTML = "<em>⚡ Deep thinking...</em>";
-      thoughtSlot.innerHTML = "";
-      askBtn.disabled = true;
+    function resetChat() {
+      chatHistory = [];
+      const stream = document.getElementById('chatStream');
+      stream.innerHTML = '<div class="msg msg-bot">⚡ New conversation started. What would you like to explore?</div>';
+    }
+
+    async function sendChat() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      const sendBtn = document.getElementById('sendBtn');
+      const stream = document.getElementById('chatStream');
+      if (!text) return;
+
+      // Render User Bubble
+      const userBubble = document.createElement('div');
+      userBubble.className = 'msg msg-user';
+      userBubble.innerText = text;
+      stream.appendChild(userBubble);
+
+      // Add to conversation memory
+      chatHistory.push({ role: "user", parts: [{ text: text }] });
+      input.value = "";
+      sendBtn.disabled = true;
+
+      // Render Thinking Placeholder
+      const botBubble = document.createElement('div');
+      botBubble.className = 'msg msg-bot';
+      botBubble.innerHTML = "<em>⚡ Deep thinking...</em>";
+      stream.appendChild(botBubble);
+      stream.scrollTop = stream.scrollHeight;
 
       try {
         const response = await fetch('/ask', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ prompt })
+          body: JSON.stringify({ history: chatHistory })
         });
 
         const data = await response.json();
 
-        if (data.thinking) {
-          thoughtSlot.innerHTML = `
-            <details class="thought-details" open>
-              <summary class="thought-summary">🧠 Deep Thought Process</summary>
-              <div class="thought-content">${renderBasicMarkdown(data.thinking)}</div>
-            </details>
-          `;
-        }
-
         if (data.answer) {
-          output.innerHTML = renderBasicMarkdown(data.answer);
+          let innerHtml = "";
+          if (data.thinking) {
+            innerHtml += `
+              <details class="thought-details">
+                <summary class="thought-summary">🧠 Deep Thought Process</summary>
+                <div class="thought-content">${renderBasicMarkdown(data.thinking)}</div>
+              </details>
+            `;
+          }
+          innerHtml += renderBasicMarkdown(data.answer);
+          botBubble.innerHTML = innerHtml;
+
+          // Remember bot answer in context
+          chatHistory.push({ role: "model", parts: [{ text: data.answer }] });
         } else {
-          output.innerHTML = '<div class="error-box">' + (data.error || "No response received.") + '</div>';
+          botBubble.innerHTML = `<span style="color:#f87171;">${data.error || "No response."}</span>`;
         }
       } catch (err) {
-        output.innerHTML = '<div class="error-box">Connection failed: ' + err.message + '</div>';
+        botBubble.innerHTML = `<span style="color:#f87171;">Connection error: ${err.message}</span>`;
       } finally {
-        askBtn.disabled = false;
+        sendBtn.disabled = false;
+        stream.scrollTop = stream.scrollHeight;
       }
-    }
-
-    function readAloud() {
-      const text = document.getElementById('aiOutput').innerText;
-      if (!text) return;
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      window.speechSynthesis.speak(utterance);
     }
 
     function getCover(track) {
@@ -557,7 +632,7 @@ HTML_PAGE = """<!DOCTYPE html>
             <details class="lyrics-drawer">
               <summary class="lyrics-summary">📜 Search Lyrics Online</summary>
               <div class="lyrics-body" style="color: #94a3b8; font-style: italic;">
-                Lyrics not directly in database. You can find the full licensed lyrics by searching for "${track.title} by${track.artist}" on Google or opening Spotify / Apple Music.
+                Lyrics not directly in database. You can find full licensed lyrics for "${track.title}" on Spotify or Apple Music.
               </div>
             </details>
           `}
@@ -727,9 +802,16 @@ def index():
 
 @app.route("/ask", methods=["POST"])
 def ask():
-    prompt = request.json.get("prompt", "")
-    if not prompt:
-        return jsonify({"error": "Empty prompt"}), 400
+    req_data = request.json or {}
+    history = req_data.get("history", [])
+
+    if not history:
+        prompt = req_data.get("prompt", "")
+        if prompt:
+            history = [{"role": "user", "parts": [{"text": prompt}]}]
+        else:
+            return jsonify({"error": "Empty message"}), 400
+
     if not GEMINI_API_KEY:
         return jsonify({"error": "GEMINI_API_KEY missing on Render."}), 500
 
@@ -738,21 +820,19 @@ def ask():
         "x-goog-api-key": GEMINI_API_KEY
     }
 
+    # Pass the full conversational thread so Gelo remembers context
     payload = {
         "system_instruction": {
             "parts": [{
                 "text": (
-                    "You are Gelo, an advanced AI assistant. "
-                    "When solving problems or answering questions, you MUST first conduct a deep reasoning process. "
-                    "Format your response as follows:\\n"
-                    "<thought>\\n"
-                    "[Write your step-by-step reasoning, hypotheses, logic verification, and background knowledge here]\\n"
-                    "</thought>\\n"
-                    "[Write your final direct, verified answer here in clean markdown]"
+                    "You are Gelo, an elite conversational AI companion. "
+                    "Engage in natural, continuous, multi-turn conversation. Remember details from prior messages. "
+                    "Conduct a step-by-step reasoning process enclosed in <thought>...</thought> tags, "
+                    "then deliver your final answer in clean, scannable markdown outside the tags."
                 )
             }]
         },
-        "contents": [{"parts": [{"text": prompt}]}]
+        "contents": history[-8:] # Keep the last 8 turns for high speed & quota efficiency
     }
 
     models = ["gemini-3.8-flash", "gemini-3.6-flash"]
@@ -771,7 +851,7 @@ def ask():
                     thinking = thought_match.group(1).strip()
                     answer = re.sub(r'<thought>.*?</thought>', '', raw_text, flags=re.DOTALL).strip()
                 else:
-                    thinking = "Analyzed user query, synthesized relevant concepts, and structured optimal response."
+                    thinking = "Analyzed conversation history and formulated the direct next step."
                     answer = raw_text.strip()
 
                 return jsonify({
@@ -785,14 +865,13 @@ def ask():
             last_err = str(e)
             continue
 
-    return jsonify({"error": f"API rate limit: {last_err}"}), 503
+    return jsonify({"error": f"Service busy: {last_err}"}), 503
 
 @app.route("/identify", methods=["POST"])
 def identify():
     if "file" not in request.files:
         return jsonify({"error": {"error_message": "Missing audio file"}}), 400
     file = request.files["file"]
-    # Request lyrics along with Apple Music and Spotify links
     data = {"api_token": AUDD_API_KEY, "return": "apple_music,spotify,lyrics"}
     try:
         res = requests.post("https://api.audd.io/", data=data, files={"file": file.read()}, timeout=25)
