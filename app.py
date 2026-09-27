@@ -3,7 +3,7 @@ import re
 import sqlite3
 from datetime import datetime, timezone
 import requests
-from flask import Flask, request, jsonify, make_response, session, redirect, url_for
+from flask import Flask, request, jsonify, make_response, session, redirect
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
@@ -13,7 +13,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 AUDD_API_KEY = os.getenv("AUDD_API_KEY", "").strip()
 DB_FILE = "users.db"
 
-# Initialize SQLite database
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -21,9 +20,15 @@ def init_db():
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
+            display_name TEXT,
             password_hash TEXT NOT NULL
         )
     """)
+    # Ensure display_name column exists for existing databases
+    c.execute("PRAGMA table_info(users)")
+    cols = [col[1] for col in c.fetchall()]
+    if "display_name" not in cols:
+        c.execute("ALTER TABLE users ADD COLUMN display_name TEXT")
     conn.commit()
     conn.close()
 
@@ -151,8 +156,12 @@ AUTH_TEMPLATE = """<!DOCTYPE html>
     <div id="authError" class="error-msg"></div>
 
     <form onsubmit="handleAuth(event)">
+      <div class="form-group" id="displayNameGroup" style="display: none;">
+        <label>Display Name (Nickname)</label>
+        <input type="text" class="form-input" id="authDisplayName" placeholder="e.g. Mike">
+      </div>
       <div class="form-group">
-        <label>Username</label>
+        <label id="userLabel">Username or Email</label>
         <input type="text" class="form-input" id="authUsername" required autocomplete="username">
       </div>
       <div class="form-group">
@@ -170,6 +179,7 @@ AUTH_TEMPLATE = """<!DOCTYPE html>
       document.getElementById('tabLogin').classList.toggle('active', mode === 'login');
       document.getElementById('tabRegister').classList.toggle('active', mode === 'register');
       document.getElementById('submitBtn').innerText = mode === 'login' ? 'Sign In' : 'Create Account';
+      document.getElementById('displayNameGroup').style.display = mode === 'register' ? 'block' : 'none';
       document.getElementById('authError').style.display = 'none';
     }
 
@@ -177,6 +187,7 @@ AUTH_TEMPLATE = """<!DOCTYPE html>
       e.preventDefault();
       const username = document.getElementById('authUsername').value.trim();
       const password = document.getElementById('authPassword').value;
+      const displayName = document.getElementById('authDisplayName').value.trim();
       const errBox = document.getElementById('authError');
       errBox.style.display = 'none';
 
@@ -185,7 +196,7 @@ AUTH_TEMPLATE = """<!DOCTYPE html>
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({ username, password, display_name: displayName })
         });
         const data = await res.json();
         if (res.ok) {
@@ -254,18 +265,25 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       -webkit-text-fill-color: transparent;
     }
     .user-tag {
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-muted);
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
     }
-    .logout-btn {
-      color: #f87171;
-      text-decoration: underline;
+    .user-badge {
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      color: var(--accent);
+      padding: 4px 10px;
+      border-radius: 8px;
       cursor: pointer;
       font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
+    .logout-btn { color: #f87171; text-decoration: underline; cursor: pointer; font-weight: 600; font-size: 12px; }
     .tab-bar {
       display: flex;
       background: rgba(15, 23, 42, 0.85);
@@ -332,7 +350,52 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
     .chat-input:focus { border-color: var(--accent); }
     .send-btn { background: #2563eb; border: none; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
     .send-btn:disabled { opacity: 0.5; }
-    /* Radar */
+    
+    /* Settings Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 16px;
+    }
+    .modal-card {
+      background: #111827;
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 20px;
+      width: 100%;
+      max-width: 360px;
+    }
+    .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 14px; color: #fff; display: flex; justify-content: space-between; }
+    .modal-close { cursor: pointer; color: var(--text-muted); font-size: 18px; }
+    .modal-btn {
+      width: 100%;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      padding: 10px;
+      border-radius: 10px;
+      font-weight: 600;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+    .modal-input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #fff;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      outline: none;
+    }
+
+    /* Radar UI */
     .radar-wrapper { display: flex; flex-direction: column; align-items: center; padding: 24px 16px 20px; }
     .pulse-container { position: relative; width: 140px; height: 140px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
     .radar-btn { position: relative; z-index: 2; width: 108px; height: 108px; border-radius: 50%; background: linear-gradient(145deg, #0ea5e9, #2563eb); box-shadow: 0 0 30px var(--accent-glow); display: flex; align-items: center; justify-content: center; cursor: pointer; border: none; color: #fff; font-size: 40px; transition: transform 0.1s ease-out; }
@@ -363,7 +426,7 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       <span class="brand-title">HELLO Gelo</span>
     </div>
     <div class="user-tag">
-      <span>{{ username }}</span>
+      <div class="user-badge" onclick="openSettings()">👤 {{ display_name }} ⚙️</div>
       <span class="logout-btn" onclick="window.location.href='/logout'">Logout</span>
     </div>
   </div>
@@ -379,7 +442,7 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       <span class="chat-reset-btn" onclick="resetChat()">New Topic</span>
     </div>
     <div class="chat-stream" id="chatStream">
-      <div class="msg msg-bot">⚡ Hi {{ username }}! What would you like to explore or learn today?</div>
+      <div class="msg msg-bot">⚡ Hi {{ display_name }}! What would you like to explore or learn today?</div>
     </div>
     <div class="chat-input-bar">
       <input type="text" class="chat-input" id="chatInput" placeholder="Reply or ask a question..." onkeydown="handleKey(event)">
@@ -406,6 +469,19 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
+  <!-- Settings / Profile Modal -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-card">
+      <div class="modal-title">
+        <span>Profile & Settings</span>
+        <span class="modal-close" onclick="closeSettings()">&times;</span>
+      </div>
+      <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Display Name</label>
+      <input type="text" class="modal-input" id="newDisplayName" value="{{ display_name }}">
+      <button class="modal-btn" onclick="updateDisplayName()">Save Display Name</button>
+    </div>
+  </div>
+
   <script>
     let chatHistory = [];
     let audioCtx, analyser, sourceNode, animFrame;
@@ -417,6 +493,28 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       document.getElementById('viewMusic').classList.toggle('active-view', tab === 'music');
       document.getElementById('tabBrain').classList.toggle('active', tab === 'brain');
       document.getElementById('tabMusic').classList.toggle('active', tab === 'music');
+    }
+
+    function openSettings() { document.getElementById('settingsModal').style.display = 'flex'; }
+    function closeSettings() { document.getElementById('settingsModal').style.display = 'none'; }
+
+    async function updateDisplayName() {
+      const name = document.getElementById('newDisplayName').value.trim();
+      if (!name) return;
+      try {
+        const res = await fetch('/api/update-profile', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ display_name: name })
+        });
+        if (res.ok) {
+          window.location.reload();
+        } else {
+          alert('Failed to update name.');
+        }
+      } catch (e) {
+        alert(e.message);
+      }
     }
 
     function renderBasicMarkdown(text) {
@@ -688,6 +786,13 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
+def clean_name(raw_val, custom_display=None):
+    if custom_display and custom_display.strip():
+        return custom_display.strip()
+    if "@" in raw_val:
+        return raw_val.split("@")[0]
+    return raw_val
+
 # --- AUTH ROUTES ---
 @app.route("/login")
 def login_page():
@@ -702,24 +807,26 @@ def register():
     data = request.json or {}
     username = data.get("username", "").strip()
     password = data.get("password", "").strip()
+    display_name = data.get("display_name", "").strip()
 
     if not username or not password:
-        return jsonify({"error": "Username and password required."}), 400
-    if len(username) < 3:
-        return jsonify({"error": "Username must be at least 3 characters."}), 400
+        return jsonify({"error": "Username/Email and password required."}), 400
     if len(password) < 6:
         return jsonify({"error": "Password must be at least 6 characters."}), 400
+
+    resolved_display = clean_name(username, display_name)
 
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     try:
-        c.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", 
-                  (username, generate_password_hash(password)))
+        c.execute("INSERT INTO users (username, display_name, password_hash) VALUES (?, ?, ?)", 
+                  (username, resolved_display, generate_password_hash(password)))
         conn.commit()
         session["user"] = username
+        session["display_name"] = resolved_display
         return jsonify({"status": "registered"})
     except sqlite3.IntegrityError:
-        return jsonify({"error": "Username already taken."}), 409
+        return jsonify({"error": "Account already exists."}), 409
     finally:
         conn.close()
 
@@ -731,18 +838,38 @@ def login():
 
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT password_hash FROM users WHERE username = ?", (username,))
+    c.execute("SELECT password_hash, display_name FROM users WHERE username = ?", (username,))
     row = c.fetchone()
     conn.close()
 
     if row and check_password_hash(row[0], password):
         session["user"] = username
+        session["display_name"] = row[1] if row[1] else clean_name(username)
         return jsonify({"status": "logged_in"})
     return jsonify({"error": "Invalid username or password."}), 401
+
+@app.route("/api/update-profile", methods=["POST"])
+def update_profile():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.json or {}
+    new_name = data.get("display_name", "").strip()
+    if not new_name:
+        return jsonify({"error": "Display name cannot be empty"}), 400
+
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("UPDATE users SET display_name = ? WHERE username = ?", (new_name, session["user"]))
+    conn.commit()
+    conn.close()
+
+    session["display_name"] = new_name
+    return jsonify({"status": "updated"})
 
 @app.route("/logout")
 def logout():
     session.pop("user", None)
+    session.pop("display_name", None)
     return redirect("/login")
 
 # --- PROTECTED APP ROUTES ---
@@ -750,7 +877,8 @@ def logout():
 def index():
     if "user" not in session:
         return redirect("/login")
-    rendered = MAIN_TEMPLATE.replace("{{ username }}", session["user"])
+    display_name = session.get("display_name") or clean_name(session["user"])
+    rendered = MAIN_TEMPLATE.replace("{{ display_name }}", display_name)
     resp = make_response(rendered)
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return resp
@@ -768,14 +896,16 @@ def ask():
         return jsonify({"error": "GEMINI_API_KEY missing."}), 500
 
     now_utc = datetime.now(timezone.utc).strftime('%A, %B %d, %Y, %H:%M:%S UTC')
+    display_name = session.get("display_name") or clean_name(session["user"])
+
     payload = {
         "system_instruction": {
             "parts": [{
                 "text": (
-                    f"You are Gelo, an elite conversational AI companion. The current reference time is {now_utc}. "
-                    "Engage in continuous, multi-turn conversation remembering prior context. "
-                    "Conduct a step-by-step reasoning process enclosed in <thought>...</thought> tags, "
-                    "then deliver your final answer in clean, scannable markdown outside the tags."
+                    f"You are Gelo, an elite conversational AI companion. The user's name is {display_name}. "
+                    f"The current reference time is {now_utc}. Engage in natural conversation remembering past context. "
+                    "Conduct your step-by-step reasoning process enclosed in <thought>...</thought> tags, "
+                    "then deliver your clean final response outside the tags."
                 )
             }]
         },
@@ -795,7 +925,7 @@ def ask():
                     thinking = thought_match.group(1).strip()
                     answer = re.sub(r'<thought>.*?</thought>', '', raw_text, flags=re.DOTALL).strip()
                 else:
-                    thinking = "Analyzed conversation history and formulated the response."
+                    thinking = "Synthesized context and prepared response."
                     answer = raw_text.strip()
                 return jsonify({"thinking": thinking, "answer": answer})
         except Exception:
