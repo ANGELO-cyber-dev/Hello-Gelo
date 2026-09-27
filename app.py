@@ -52,7 +52,7 @@ HTML_TEMPLATE = """
       letter-spacing: 0.8px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: space-between;
     }
     textarea {
       width: 100%;
@@ -79,10 +79,6 @@ HTML_TEMPLATE = """
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
-      transition: background 0.2s;
-    }
-    button.action-btn:active {
-      transform: scale(0.98);
     }
     button.btn-green {
       background: #059669;
@@ -99,12 +95,12 @@ HTML_TEMPLATE = """
       color: #f87171;
     }
 
-    /* Shazam UI Styling */
+    /* Shazam Radar & Visualizer */
     .shazam-container {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 20px 0 10px 0;
+      padding: 16px 0 6px 0;
     }
     .pulse-wrapper {
       position: relative;
@@ -113,26 +109,22 @@ HTML_TEMPLATE = """
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
     .shazam-circle {
       position: relative;
       z-index: 2;
-      width: 100px;
-      height: 100px;
+      width: 96px;
+      height: 96px;
       border-radius: 50%;
       background: linear-gradient(135deg, #0088ff, #0051ff);
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       box-shadow: 0 0 25px rgba(0, 136, 255, 0.45);
       user-select: none;
-      transition: transform 0.2s;
-    }
-    .shazam-circle:active {
-      transform: scale(0.94);
+      transition: transform 0.1s ease-out;
     }
     .shazam-icon {
       font-size: 38px;
@@ -170,22 +162,30 @@ HTML_TEMPLATE = """
       text-align: center;
       min-height: 22px;
     }
+    .sub-link {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 8px;
+      cursor: pointer;
+      text-decoration: underline;
+    }
 
-    /* Track Result Card */
+    /* Track Cards */
     .track-card {
-      margin-top: 16px;
+      margin-top: 14px;
       width: 100%;
       background: #1f2937;
       border-radius: 12px;
       padding: 12px;
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
       box-sizing: border-box;
+      border-left: 4px solid #0088ff;
     }
     .track-cover {
-      width: 64px;
-      height: 64px;
+      width: 58px;
+      height: 58px;
       border-radius: 8px;
       background: #374151;
       object-fit: cover;
@@ -196,7 +196,7 @@ HTML_TEMPLATE = """
       overflow: hidden;
     }
     .track-title {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
       color: #fff;
       white-space: nowrap;
@@ -204,7 +204,7 @@ HTML_TEMPLATE = """
       text-overflow: ellipsis;
     }
     .track-artist {
-      font-size: 14px;
+      font-size: 13px;
       color: #94a3b8;
       white-space: nowrap;
       overflow: hidden;
@@ -213,27 +213,42 @@ HTML_TEMPLATE = """
     }
     .track-links {
       display: flex;
-      gap: 10px;
-      margin-top: 8px;
+      gap: 8px;
+      margin-top: 6px;
     }
     .track-link-btn {
-      font-size: 12px;
-      padding: 4px 8px;
-      border-radius: 6px;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 5px;
       text-decoration: none;
       color: #fff;
       background: #0284c7;
       font-weight: 600;
     }
-    #filePicker {
-      display: none;
+    .history-card {
+      background: #172033;
+      padding: 10px;
+      margin-top: 8px;
+      border-left: 3px solid #3b82f6;
     }
-    .sub-link {
-      font-size: 12px;
-      color: #64748b;
-      margin-top: 10px;
+    .history-header {
+      font-size: 13px;
+      color: #60a5fa;
+      font-weight: 600;
+      margin-top: 16px;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .clear-btn {
+      font-size: 11px;
+      color: #94a3b8;
       cursor: pointer;
       text-decoration: underline;
+    }
+    #filePicker {
+      display: none;
     }
   </style>
 </head>
@@ -243,7 +258,7 @@ HTML_TEMPLATE = """
 
   <div class="card">
     <div class="card-title">💬 Conversational Brain</div>
-    <textarea id="promptInput" rows="3" placeholder="Ask me anything...">I want to learn Forex Trading can you give me a website I can learn from</textarea>
+    <textarea id="promptInput" rows="3" placeholder="Ask me anything...">Hello Gelo</textarea>
     <div class="btn-row">
       <button class="action-btn" id="askBtn" onclick="askAi()">Ask Gelo</button>
       <button class="action-btn btn-green" onclick="readAloud()">🗣️ Read</button>
@@ -252,7 +267,9 @@ HTML_TEMPLATE = """
   </div>
 
   <div class="card">
-    <div class="card-title">🎵 Music Recognition</div>
+    <div class="card-title">
+      <span>🎵 Music Recognition</span>
+    </div>
     
     <div class="shazam-container">
       <div id="pulseWrapper" class="pulse-wrapper">
@@ -266,10 +283,22 @@ HTML_TEMPLATE = """
       <div class="sub-link" onclick="document.getElementById('filePicker').click()">or upload audio file</div>
       <input type="file" id="filePicker" accept="audio/*" onchange="uploadAudio(this.files[0])">
       <div id="resultContainer" style="width: 100%;"></div>
+
+      <div style="width: 100%;">
+        <div class="history-header">
+          <span>Search History</span>
+          <span class="clear-btn" onclick="clearHistory()">Clear</span>
+        </div>
+        <div id="historyList"></div>
+      </div>
     </div>
   </div>
 
   <script>
+    let audioCtx, analyser, sourceNode, animationId;
+
+    document.addEventListener("DOMContentLoaded", renderHistory);
+
     async function askAi() {
       const prompt = document.getElementById('promptInput').value.trim();
       const output = document.getElementById('aiOutput');
@@ -286,18 +315,13 @@ HTML_TEMPLATE = """
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ prompt })
         });
-        
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.includes("application/json")) {
           const data = await response.json();
-          if (data.answer) {
-            output.innerText = data.answer;
-          } else {
-            output.innerText = data.error || "No response received.";
-            output.className = "output error";
-          }
+          output.innerText = data.answer || data.error || "No response received.";
+          if (data.error) output.className = "output error";
         } else {
-          output.innerText = "Server is warming up or timed out. Please try again.";
+          output.innerText = "Server is warming up. Please try again.";
           output.className = "output error";
         }
       } catch (err) {
@@ -316,14 +340,19 @@ HTML_TEMPLATE = """
       window.speechSynthesis.speak(utterance);
     }
 
+    function getCover(track) {
+      if (track.spotify && track.spotify.album && track.spotify.album.images && track.spotify.album.images[0]) {
+        return track.spotify.album.images[0].url;
+      }
+      if (track.apple_music && track.apple_music.artwork) {
+        return track.apple_music.artwork.url.replace('{w}x{h}', '300x300');
+      }
+      return 'https://via.placeholder.com/150/1e293b/38bdf8?text=Song';
+    }
+
     function renderShazamResult(track) {
       const container = document.getElementById('resultContainer');
-      const coverUrl = (track.spotify && track.spotify.album && track.spotify.album.images && track.spotify.album.images[0])
-        ? track.spotify.album.images[0].url
-        : (track.apple_music && track.apple_music.artwork)
-          ? track.apple_music.artwork.url.replace('{w}x{h}', '300x300')
-          : 'https://via.placeholder.com/150/1e293b/38bdf8?text=Song';
-
+      const coverUrl = getCover(track);
       const spotifyLink = track.spotify ? track.spotify.external_urls.spotify : null;
       const appleLink = track.apple_music ? track.apple_music.url : null;
 
@@ -340,6 +369,79 @@ HTML_TEMPLATE = """
           </div>
         </div>
       `;
+      saveToHistory(track);
+    }
+
+    function saveToHistory(track) {
+      const history = JSON.parse(localStorage.getItem('gelo_music_history') || '[]');
+      const filtered = history.filter(item => item.title !== track.title);
+      filtered.unshift({
+        title: track.title,
+        artist: track.artist,
+        cover: getCover(track),
+        spotify: track.spotify ? track.spotify.external_urls.spotify : null,
+        apple: track.apple_music ? track.apple_music.url : null
+      });
+      localStorage.setItem('gelo_music_history', JSON.stringify(filtered.slice(0, 6)));
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const list = document.getElementById('historyList');
+      const history = JSON.parse(localStorage.getItem('gelo_music_history') || '[]');
+      if (history.length === 0) {
+        list.innerHTML = `<div style="font-size: 12px; color: #475569; padding: 4px 0;">No searches yet.</div>`;
+        return;
+      }
+      list.innerHTML = history.map(item => `
+        <div class="track-card history-card">
+          <img class="track-cover" style="width: 44px; height: 44px;" src="${item.cover}">
+          <div class="track-info">
+            <div class="track-title" style="font-size: 14px;">${item.title}</div>
+            <div class="track-artist" style="font-size: 12px;">${item.artist}</div>
+            <div class="track-links">
+              ${item.spotify ? `<a class="track-link-btn" style="font-size: 10px; padding: 2px 6px;" href="${item.spotify}" target="_blank">Spotify</a>` : ''}
+              ${item.apple ? `<a class="track-link-btn" style="font-size: 10px; padding: 2px 6px;" href="${item.apple}" target="_blank">Apple</a>` : ''}
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function clearHistory() {
+      localStorage.removeItem('gelo_music_history');
+      renderHistory();
+    }
+
+    function startVisualizer(stream) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      sourceNode = audioCtx.createMediaStreamSource(stream);
+      sourceNode.connect(analyser);
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      const button = document.getElementById('shazamBtn');
+
+      function draw() {
+        animationId = requestAnimationFrame(draw);
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
+        let average = sum / bufferLength;
+        let scale = 1 + (average / 255) * 0.22;
+        button.style.transform = `scale(${scale})`;
+      }
+      draw();
+    }
+
+    function stopVisualizer() {
+      if (animationId) cancelAnimationFrame(animationId);
+      if (sourceNode) sourceNode.disconnect();
+      if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+      const button = document.getElementById('shazamBtn');
+      if (button) button.style.transform = 'scale(1)';
     }
 
     async function uploadAudio(file) {
@@ -349,6 +451,7 @@ HTML_TEMPLATE = """
       status.innerText = "Searching database...";
       status.className = "shazam-status";
       wrapper.classList.remove('pulsing');
+      stopVisualizer();
 
       const formData = new FormData();
       formData.append('file', file);
@@ -359,11 +462,8 @@ HTML_TEMPLATE = """
         if (data.result && data.result.title) {
           status.innerText = "Track Identified!";
           renderShazamResult(data.result);
-        } else if (data.error) {
-          status.innerText = "Error: " + (data.error.error_message || "Recognition failed");
-          status.className = "shazam-status error";
         } else {
-          status.innerText = "No match found. Try playing closer to speaker.";
+          status.innerText = "No exact match. Try playing closer.";
           status.className = "shazam-status error";
         }
       } catch (e) {
@@ -385,6 +485,8 @@ HTML_TEMPLATE = """
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        startVisualizer(stream);
+
         let mimeType = 'audio/webm';
         if (MediaRecorder.isTypeSupported('audio/mp4')) {
           mimeType = 'audio/mp4';
@@ -405,7 +507,7 @@ HTML_TEMPLATE = """
         mediaRecorder.start(250);
         wrapper.classList.add('pulsing');
 
-        let secondsLeft = 6;
+        let secondsLeft = 7;
         status.innerText = `Listening... (${secondsLeft}s)`;
         const timer = setInterval(() => {
           secondsLeft--;
@@ -419,6 +521,7 @@ HTML_TEMPLATE = """
         }, 1000);
       } catch (err) {
         wrapper.classList.remove('pulsing');
+        stopVisualizer();
         document.getElementById('filePicker').click();
       }
     }
@@ -445,7 +548,6 @@ def ask():
     }
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    # Try 2.5-flash first; if unavailable, fallback directly to 3.6-flash
     for model in ["gemini-2.5-flash", "gemini-3.6-flash"]:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
