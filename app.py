@@ -1,27 +1,22 @@
 import os
 import requests
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, make_response
 
 app = Flask(__name__)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 AUDD_API_KEY = os.getenv("AUDD_API_KEY", "").strip()
 
-HTML_TEMPLATE = """
-<!DOCTYPE html>
+HTML_PAGE = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>HELLO Gelo</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     :root {
       --bg: #07090e;
-      --card-bg: rgba(18, 24, 38, 0.75);
+      --card-bg: rgba(18, 24, 38, 0.85);
       --card-border: rgba(255, 255, 255, 0.08);
       --accent: #38bdf8;
       --accent-glow: rgba(56, 189, 248, 0.35);
@@ -34,8 +29,8 @@ HTML_TEMPLATE = """
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       -webkit-tap-highlight-color: transparent;
-      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
     }
 
     body {
@@ -97,42 +92,32 @@ HTML_TEMPLATE = """
       align-items: center;
       justify-content: center;
       gap: 6px;
-      transition: all 0.25s ease;
+      transition: all 0.2s ease;
     }
 
     .tab-btn.active {
-      background: rgba(56, 189, 248, 0.12);
+      background: rgba(56, 189, 248, 0.15);
       color: var(--accent);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
 
     .glass-card {
       background: var(--card-bg);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
       border: 1px solid var(--card-border);
       border-radius: 20px;
       padding: 20px;
       width: 100%;
       max-width: 440px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
       display: none;
-      animation: fadeIn 0.25s ease-out forwards;
     }
 
     .glass-card.active-view {
       display: block;
     }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
     textarea {
       width: 100%;
       background: rgba(8, 12, 22, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       color: var(--text);
       padding: 14px;
       border-radius: 14px;
@@ -144,7 +129,6 @@ HTML_TEMPLATE = """
 
     textarea:focus {
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
     }
 
     .btn-row {
@@ -154,9 +138,9 @@ HTML_TEMPLATE = """
 
     .btn {
       border: none;
-      padding: 11px 18px;
+      padding: 12px 20px;
       border-radius: 12px;
-      font-size: 13.5px;
+      font-size: 14px;
       font-weight: 600;
       color: #fff;
       cursor: pointer;
@@ -164,7 +148,6 @@ HTML_TEMPLATE = """
       align-items: center;
       justify-content: center;
       gap: 6px;
-      transition: all 0.15s ease;
     }
 
     .btn:active { transform: scale(0.97); }
@@ -177,7 +160,6 @@ HTML_TEMPLATE = """
 
     .btn-green {
       background: linear-gradient(135deg, #10b981, #059669);
-      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
     }
 
     .ai-output {
@@ -187,18 +169,17 @@ HTML_TEMPLATE = """
       font-size: 14.5px;
       line-height: 1.65;
       color: #cbd5e1;
+      white-space: pre-wrap;
       word-break: break-word;
     }
 
-    .ai-output p { margin-bottom: 10px; }
-    .ai-output ul, .ai-output ol { padding-left: 20px; margin-bottom: 10px; }
+    .ai-output strong { color: #fff; }
     .ai-output code {
-      background: rgba(0, 0, 0, 0.4);
-      padding: 2px 6px;
-      border-radius: 6px;
-      font-family: monospace;
-      font-size: 13px;
+      background: rgba(0, 0, 0, 0.5);
       color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 5px;
+      font-family: monospace;
     }
 
     .error-box {
@@ -209,7 +190,7 @@ HTML_TEMPLATE = """
       border: 1px solid rgba(239, 68, 68, 0.2);
     }
 
-    /* Radar UI */
+    /* Radar View */
     .radar-wrapper {
       display: flex;
       flex-direction: column;
@@ -365,17 +346,15 @@ HTML_TEMPLATE = """
     <button class="tab-btn" id="tabMusic" onclick="switchView('music')">🎵 Music Search</button>
   </div>
 
-  <!-- CONVERSATIONAL VIEW -->
   <div class="glass-card active-view" id="viewBrain">
     <textarea id="promptInput" rows="3" placeholder="Ask Gelo anything...">Teach me python programming</textarea>
     <div class="btn-row">
-      <button class="btn btn-primary" id="askBtn" onclick="askAiFast()">Ask Gelo</button>
+      <button class="btn btn-primary" id="askBtn" onclick="askAi()">Ask Gelo</button>
       <button class="btn btn-green" onclick="readAloud()">🗣️ Read</button>
     </div>
     <div id="aiOutput" class="ai-output" style="display: none;"></div>
   </div>
 
-  <!-- MUSIC RECOGNITION VIEW -->
   <div class="glass-card" id="viewMusic">
     <div class="radar-wrapper">
       <div class="pulse-container" id="pulseContainer">
@@ -410,8 +389,19 @@ HTML_TEMPLATE = """
       document.getElementById('tabMusic').classList.toggle('active', tab === 'music');
     }
 
-    // High-speed direct API call with client-side progressive typewriter
-    async function askAiFast() {
+    // Built-in lightweight markdown formatter (zero external dependencies)
+    function renderBasicMarkdown(text) {
+      let escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      escaped = escaped.replace(/```([\\s\\S]*?)```/g, '<pre><code>$1</code></pre>');
+      escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+      escaped = escaped.replace(/\\*\\*([^\\*]+)\\*\\*/g, '<strong>$1</strong>');
+      escaped = escaped.replace(/^### (.*$)/gim, '<h3 style="color:#38bdf8; margin:8px 0;">$1</h3>');
+      escaped = escaped.replace(/^## (.*$)/gim, '<h2 style="color:#38bdf8; margin:10px 0;">$1</h2>');
+      escaped = escaped.replace(/^# (.*$)/gim, '<h1 style="color:#38bdf8; margin:12px 0;">$1</h1>');
+      return escaped;
+    }
+
+    async function askAi() {
       const prompt = document.getElementById('promptInput').value.trim();
       const output = document.getElementById('aiOutput');
       const askBtn = document.getElementById('askBtn');
@@ -425,39 +415,20 @@ HTML_TEMPLATE = """
         const response = await fetch('/ask', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ prompt })
+          body: JSON.stringify({ prompt: prompt })
         });
 
         const data = await response.json();
         if (data.answer) {
-          typewriterRender(data.answer, output);
+          output.innerHTML = renderBasicMarkdown(data.answer);
         } else {
-          output.innerHTML = `<div class="error-box">${data.error || "No response received."}</div>`;
+          output.innerHTML = '<div class="error-box">' + (data.error || "No response received.") + '</div>';
         }
       } catch (err) {
-        output.innerHTML = `<div class="error-box">Connection failed: ${err.message}</div>`;
+        output.innerHTML = '<div class="error-box">Connection failed: ' + err.message + '</div>';
       } finally {
         askBtn.disabled = false;
       }
-    }
-
-    // Ultra-fast progressive markdown reveal
-    function typewriterRender(fullText, element) {
-      const words = fullText.split(' ');
-      let currentIdx = 0;
-      element.innerHTML = "";
-
-      const step = Math.max(1, Math.floor(words.length / 40));
-      const interval = setInterval(() => {
-        currentIdx += step;
-        if (currentIdx >= words.length) {
-          element.innerHTML = marked.parse(fullText);
-          clearInterval(interval);
-        } else {
-          const slice = words.slice(0, currentIdx).join(' ');
-          element.innerHTML = marked.parse(slice);
-        }
-      }, 25);
     }
 
     function readAloud() {
@@ -469,16 +440,20 @@ HTML_TEMPLATE = """
     }
 
     function getCover(track) {
-      if (track.spotify?.album?.images?.[0]) return track.spotify.album.images[0].url;
-      if (track.apple_music?.artwork) return track.apple_music.artwork.url.replace('{w}x{h}', '300x300');
+      if (track.spotify && track.spotify.album && track.spotify.album.images && track.spotify.album.images[0]) {
+        return track.spotify.album.images[0].url;
+      }
+      if (track.apple_music && track.apple_music.artwork) {
+        return track.apple_music.artwork.url.replace('{w}x{h}', '300x300');
+      }
       return 'https://via.placeholder.com/150/1e293b/38bdf8?text=Song';
     }
 
     function renderShazamResult(track) {
       const slot = document.getElementById('resultSlot');
       const coverUrl = getCover(track);
-      const spotify = track.spotify?.external_urls?.spotify;
-      const apple = track.apple_music?.url;
+      const spotify = track.spotify ? track.spotify.external_urls.spotify : null;
+      const apple = track.apple_music ? track.apple_music.url : null;
 
       slot.innerHTML = `
         <div class="track-result-card">
@@ -503,8 +478,8 @@ HTML_TEMPLATE = """
         title: track.title,
         artist: track.artist,
         cover: getCover(track),
-        spotify: track.spotify?.external_urls?.spotify,
-        apple: track.apple_music?.url
+        spotify: track.spotify ? track.spotify.external_urls.spotify : null,
+        apple: track.apple_music ? track.apple_music.url : null
       });
       localStorage.setItem('gelo_history', JSON.stringify(filtered.slice(0, 5)));
       renderHistory();
@@ -514,7 +489,7 @@ HTML_TEMPLATE = """
       const list = document.getElementById('historyList');
       const history = JSON.parse(localStorage.getItem('gelo_history') || '[]');
       if (!history.length) {
-        list.innerHTML = `<div style="font-size: 12px; color: #475569; padding: 6px 0;">No discoveries yet.</div>`;
+        list.innerHTML = '<div style="font-size: 12px; color: #475569; padding: 6px 0;">No discoveries yet.</div>';
         return;
       }
       list.innerHTML = history.map(item => `
@@ -649,7 +624,9 @@ HTML_TEMPLATE = """
 
 @app.route("/")
 def index():
-    return render_template_string(HTML_TEMPLATE)
+    resp = make_response(HTML_PAGE)
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
 
 @app.route("/ask", methods=["POST"])
 def ask():
@@ -657,31 +634,30 @@ def ask():
     if not prompt:
         return jsonify({"error": "Empty prompt"}), 400
     if not GEMINI_API_KEY:
-        return jsonify({"error": "GEMINI_API_KEY missing on Render."}), 500
+        return jsonify({"error": "GEMINI_API_KEY is missing on Render."}), 500
 
     headers = {
         "Content-Type": "application/json",
         "x-goog-api-key": GEMINI_API_KEY
     }
 
-    # High-signal system prompt
     payload = {
         "system_instruction": {
             "parts": [{
-                "text": "You are Gelo, a high-speed AI assistant on the HELLO Gelo platform. Deliver sharp, actionable, zero-fluff answers. Start with the direct solution immediately in sentence 1. Use clean markdown formatting and code blocks when appropriate."
+                "text": "You are Gelo, a high-speed AI assistant. Answer directly and concisely in sentence one without generic filler. Format using clean markdown."
             }]
         },
         "contents": [{"parts": [{"text": prompt}]}]
     }
 
-    # Immediate failover chain
+    # Short per-model timeout prevents Render gateway timeouts
     models = ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-1.5-flash"]
     last_err = ""
 
     for model in models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            res = requests.post(url, headers=headers, json=payload, timeout=20)
+            res = requests.post(url, headers=headers, json=payload, timeout=8)
             data = res.json()
             if "candidates" in data and data["candidates"]:
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
@@ -693,7 +669,7 @@ def ask():
             last_err = str(e)
             continue
 
-    return jsonify({"error": f"API busy: {last_err}"}), 503
+    return jsonify({"error": f"Service busy, please retry: {last_err}"}), 503
 
 @app.route("/identify", methods=["POST"])
 def identify():
@@ -702,7 +678,7 @@ def identify():
     file = request.files["file"]
     data = {"api_token": AUDD_API_KEY, "return": "apple_music,spotify"}
     try:
-        res = requests.post("https://api.audd.io/", data=data, files={"file": file.read()}, timeout=30)
+        res = requests.post("https://api.audd.io/", data=data, files={"file": file.read()}, timeout=25)
         return jsonify(res.json())
     except Exception as e:
         return jsonify({"error": {"error_message": str(e)}}), 500
