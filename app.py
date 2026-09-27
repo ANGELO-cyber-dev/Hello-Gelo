@@ -1409,7 +1409,7 @@ def ask_stream():
 
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT role, text FROM messages WHERE username = ? ORDER BY id DESC LIMIT 6", (username,))
+    c.execute("SELECT role, text FROM messages WHERE username = ? ORDER BY id DESC LIMIT 4", (username,))
     past_rows = c.fetchall()
     past_rows.reverse()
 
@@ -1454,7 +1454,7 @@ def ask_stream():
         "contents": contents
     }
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse"
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
 
     def generate():
@@ -1517,7 +1517,7 @@ def ask_fast():
 
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT role, text FROM messages WHERE username = ? ORDER BY id DESC LIMIT 6", (username,))
+    c.execute("SELECT role, text FROM messages WHERE username = ? ORDER BY id DESC LIMIT 4", (username,))
     past_rows = c.fetchall()
     past_rows.reverse()
 
@@ -1555,11 +1555,14 @@ def ask_fast():
         "contents": contents,
         "generationConfig": {
             "temperature": 0.6,
-            "maxOutputTokens": 1024
+            "maxOutputTokens": 1024,
+            "thinkingConfig": {
+                "thinkingBudget": 0
+            }
         }
     }
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
 
     try:
