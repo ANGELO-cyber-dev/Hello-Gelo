@@ -1,9 +1,11 @@
 import os
 import re
+import json
+import base64
 import sqlite3
 from datetime import datetime, timezone
 import requests
-from flask import Flask, request, jsonify, make_response, session, redirect
+from flask import Flask, request, jsonify, make_response, session, redirect, Response, stream_with_context
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
@@ -24,7 +26,16 @@ def init_db():
             password_hash TEXT NOT NULL
         )
     """)
-    # Ensure display_name column exists for existing databases
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            role TEXT NOT NULL,
+            text TEXT NOT NULL,
+            thinking TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     c.execute("PRAGMA table_info(users)")
     cols = [col[1] for col in c.fetchall()]
     if "display_name" not in cols:
@@ -34,7 +45,6 @@ def init_db():
 
 init_db()
 
-# --- AUTH TEMPLATE ---
 AUTH_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -215,7 +225,6 @@ AUTH_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
-# --- MAIN APP TEMPLATE ---
 MAIN_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -244,7 +253,7 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 16px 12px 20px;
+      padding: 12px 10px 16px;
     }
     .top-nav {
       width: 100%;
@@ -252,12 +261,12 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
     .brand { display: flex; align-items: center; gap: 8px; }
-    .brand-icon { font-size: 24px; filter: drop-shadow(0 0 12px var(--accent)); }
+    .brand-icon { font-size: 22px; filter: drop-shadow(0 0 12px var(--accent)); }
     .brand-title {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 800;
       letter-spacing: -0.5px;
       background: linear-gradient(135deg, #ffffff 30%, #38bdf8 100%);
@@ -269,39 +278,37 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       color: var(--text-muted);
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
     .user-badge {
       background: rgba(56, 189, 248, 0.12);
       border: 1px solid rgba(56, 189, 248, 0.25);
       color: var(--accent);
-      padding: 4px 10px;
+      padding: 3px 8px;
       border-radius: 8px;
       cursor: pointer;
       font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 5px;
+      font-size: 12px;
     }
     .logout-btn { color: #f87171; text-decoration: underline; cursor: pointer; font-weight: 600; font-size: 12px; }
     .tab-bar {
       display: flex;
       background: rgba(15, 23, 42, 0.85);
       border: 1px solid var(--card-border);
-      padding: 4px;
+      padding: 3px;
       border-radius: 12px;
       width: 100%;
       max-width: 480px;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
     .tab-btn {
       flex: 1;
       border: none;
       background: transparent;
       color: var(--text-muted);
-      padding: 9px 12px;
+      padding: 8px 10px;
       border-radius: 9px;
-      font-size: 13.5px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
       display: flex;
@@ -314,86 +321,96 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
     .glass-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 18px;
+      border-radius: 16px;
       width: 100%;
       max-width: 480px;
       display: none;
       overflow: hidden;
     }
-    #viewBrain { height: 75vh; }
+    #viewBrain { height: calc(100vh - 120px); }
     #viewBrain.active-view { display: flex; flex-direction: column; }
     #viewMusic.active-view { display: block; }
     .chat-header {
-      padding: 12px 16px;
+      padding: 10px 14px;
       border-bottom: 1px solid var(--card-border);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
       color: var(--text-muted);
     }
     .chat-reset-btn { color: #64748b; font-size: 12px; cursor: pointer; text-decoration: underline; }
-    .chat-stream { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
-    .msg { max-width: 88%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.55; word-break: break-word; }
+    
+    /* Action chips */
+    .chips-bar {
+      display: flex;
+      gap: 6px;
+      padding: 8px 12px;
+      overflow-x: auto;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      background: rgba(10, 14, 24, 0.5);
+      scrollbar-width: none;
+    }
+    .chips-bar::-webkit-scrollbar { display: none; }
+    .chip {
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      color: var(--accent);
+      padding: 4px 10px;
+      border-radius: 14px;
+      font-size: 11.5px;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .chat-stream { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+    .msg { max-width: 88%; padding: 10px 14px; border-radius: 14px; font-size: 13.5px; line-height: 1.55; word-break: break-word; }
     .msg-user { align-self: flex-end; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border-bottom-right-radius: 4px; }
     .msg-bot { align-self: flex-start; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--card-border); color: #e2e8f0; border-bottom-left-radius: 4px; width: 100%; max-width: 95%; }
     .msg-bot strong { color: #fff; }
-    .msg-bot code { background: rgba(0, 0, 0, 0.5); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13px; }
+    .msg-bot code { background: rgba(0, 0, 0, 0.5); color: var(--accent); padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 12.5px; }
     .msg-bot pre { background: rgba(0, 0, 0, 0.6); padding: 10px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
     .msg-bot pre code { background: transparent; padding: 0; }
+    .msg-img-preview { max-width: 180px; max-height: 140px; border-radius: 10px; margin-bottom: 6px; display: block; border: 1px solid rgba(255, 255, 255, 0.2); }
     .thought-details { margin-bottom: 8px; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; overflow: hidden; font-size: 12px; }
-    .thought-summary { padding: 6px 10px; cursor: pointer; color: var(--accent); font-weight: 600; user-select: none; }
-    .thought-content { padding: 8px 10px; color: #94a3b8; border-top: 1px solid rgba(255, 255, 255, 0.05); white-space: pre-wrap; }
-    .chat-input-bar { padding: 10px; border-top: 1px solid var(--card-border); background: rgba(11, 15, 25, 0.95); display: flex; gap: 8px; align-items: center; }
-    .chat-input { flex: 1; background: rgba(18, 24, 38, 0.8); border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text); padding: 10px 14px; border-radius: 12px; font-size: 14px; outline: none; }
+    .thought-summary { padding: 5px 8px; cursor: pointer; color: var(--accent); font-weight: 600; user-select: none; }
+    .thought-content { padding: 6px 8px; color: #94a3b8; border-top: 1px solid rgba(255, 255, 255, 0.05); white-space: pre-wrap; font-size: 11.5px; }
+    
+    .chat-input-bar {
+      padding: 8px 10px;
+      border-top: 1px solid var(--card-border);
+      background: rgba(11, 15, 25, 0.95);
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .preview-tray {
+      padding: 4px 10px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.9);
+      border-top: 1px solid var(--card-border);
+    }
+    .preview-thumb { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; }
+    .preview-clear { color: #f87171; font-size: 18px; cursor: pointer; }
+    .chat-input { flex: 1; background: rgba(18, 24, 38, 0.8); border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text); padding: 9px 12px; border-radius: 12px; font-size: 13.5px; outline: none; }
     .chat-input:focus { border-color: var(--accent); }
-    .send-btn { background: #2563eb; border: none; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .icon-btn { background: rgba(255, 255, 255, 0.06); border: 1px solid var(--card-border); color: #fff; width: 38px; height: 38px; border-radius: 10px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .icon-btn.recording { background: #ef4444; border-color: #f87171; animation: pulse-red 1.2s infinite; }
+    @keyframes pulse-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .send-btn { background: #2563eb; border: none; color: #fff; padding: 0 14px; height: 38px; border-radius: 10px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
     .send-btn:disabled { opacity: 0.5; }
     
     /* Settings Modal */
-    .modal-overlay {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(8px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-      padding: 16px;
-    }
-    .modal-card {
-      background: #111827;
-      border: 1px solid var(--card-border);
-      border-radius: 18px;
-      padding: 20px;
-      width: 100%;
-      max-width: 360px;
-    }
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+    .modal-card { background: #111827; border: 1px solid var(--card-border); border-radius: 18px; padding: 20px; width: 100%; max-width: 360px; }
     .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 14px; color: #fff; display: flex; justify-content: space-between; }
     .modal-close { cursor: pointer; color: var(--text-muted); font-size: 18px; }
-    .modal-btn {
-      width: 100%;
-      background: #2563eb;
-      color: #fff;
-      border: none;
-      padding: 10px;
-      border-radius: 10px;
-      font-weight: 600;
-      margin-top: 10px;
-      cursor: pointer;
-    }
-    .modal-input {
-      width: 100%;
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: #fff;
-      padding: 10px;
-      border-radius: 8px;
-      margin-bottom: 12px;
-      outline: none;
-    }
+    .modal-btn { width: 100%; background: #2563eb; color: #fff; border: none; padding: 10px; border-radius: 10px; font-weight: 600; margin-top: 10px; cursor: pointer; }
+    .modal-input { width: 100%; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff; padding: 10px; border-radius: 8px; margin-bottom: 12px; outline: none; }
+    .toggle-row { display: flex; justify-content: space-between; align-items: center; margin: 12px 0; font-size: 13px; color: #cbd5e1; }
 
     /* Radar UI */
     .radar-wrapper { display: flex; flex-direction: column; align-items: center; padding: 24px 16px 20px; }
@@ -441,11 +458,41 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       <span>AI Conversation</span>
       <span class="chat-reset-btn" onclick="resetChat()">New Topic</span>
     </div>
-    <div class="chat-stream" id="chatStream">
-      <div class="msg msg-bot">⚡ Hi {{ display_name }}! What would you like to explore or learn today?</div>
+    
+    <div class="chips-bar">
+      <span class="chip" onclick="quickPrompt('Teach me Python step-by-step from scratch')">🐍 Python Step-by-Step</span>
+      <span class="chip" onclick="quickPrompt('Explain quantum computing simply')">⚡ Explain Quantum</span>
+      <span class="chip" onclick="quickPrompt('Draft a professional email for a project update')">✍️ Draft Email</span>
+      <span class="chip" onclick="quickPrompt('What are chord progressions in music?')">🎵 Music Theory</span>
     </div>
+
+    <div class="chat-stream" id="chatStream">
+      {% for msg in history %}
+        <div class="msg {% if msg.role == 'user' %}msg-user{% else %}msg-bot{% endif %}">
+          {% if msg.thinking %}
+            <details class="thought-details">
+              <summary class="thought-summary">🧠 Deep Thought Process</summary>
+              <div class="thought-content">{{ msg.thinking }}</div>
+            </details>
+          {% endif %}
+          <div class="content-text">{{ msg.text }}</div>
+        </div>
+      {% else %}
+        <div class="msg msg-bot">⚡ Hi {{ display_name }}! What would you like to explore or learn today?</div>
+      {% endfor %}
+    </div>
+
+    <div class="preview-tray" id="previewTray">
+      <img id="imageThumb" class="preview-thumb" src="" alt="preview">
+      <span style="font-size: 11.5px; color: #94a3b8; flex: 1;">Image attached</span>
+      <span class="preview-clear" onclick="clearAttachedImage()">&times;</span>
+    </div>
+
     <div class="chat-input-bar">
-      <input type="text" class="chat-input" id="chatInput" placeholder="Reply or ask a question..." onkeydown="handleKey(event)">
+      <button class="icon-btn" onclick="document.getElementById('imgInput').click()" title="Attach image">📷</button>
+      <input type="file" id="imgInput" accept="image/*" style="display: none;" onchange="handleImagePicked(this.files[0])">
+      <button class="icon-btn" id="micBtn" onclick="toggleVoice()" title="Voice input">🎙️</button>
+      <input type="text" class="chat-input" id="chatInput" placeholder="Reply or ask Gelo..." onkeydown="handleKey(event)">
       <button class="send-btn" id="sendBtn" onclick="sendChat()">Send</button>
     </div>
   </div>
@@ -469,7 +516,7 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- Settings / Profile Modal -->
+  <!-- Settings Modal -->
   <div class="modal-overlay" id="settingsModal">
     <div class="modal-card">
       <div class="modal-title">
@@ -478,15 +525,33 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       </div>
       <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Display Name</label>
       <input type="text" class="modal-input" id="newDisplayName" value="{{ display_name }}">
-      <button class="modal-btn" onclick="updateDisplayName()">Save Display Name</button>
+      <div class="toggle-row">
+        <span>Auto-Read Responses (TTS)</span>
+        <input type="checkbox" id="ttsToggle" onchange="localStorage.setItem('gelo_tts', this.checked)">
+      </div>
+      <button class="modal-btn" onclick="updateDisplayName()">Save Settings</button>
     </div>
   </div>
 
   <script>
-    let chatHistory = [];
+    let attachedImageBase64 = null;
+    let recognition = null;
+    let isRecording = false;
     let audioCtx, analyser, sourceNode, animFrame;
 
-    document.addEventListener("DOMContentLoaded", renderHistory);
+    document.addEventListener("DOMContentLoaded", () => {
+      renderHistory();
+      formatExistingHistory();
+      document.getElementById('ttsToggle').checked = localStorage.getItem('gelo_tts') === 'true';
+      const stream = document.getElementById('chatStream');
+      stream.scrollTop = stream.scrollHeight;
+    });
+
+    function formatExistingHistory() {
+      document.querySelectorAll('.msg-bot .content-text').forEach(el => {
+        el.innerHTML = renderBasicMarkdown(el.innerText);
+      });
+    }
 
     function switchView(tab) {
       document.getElementById('viewBrain').classList.toggle('active-view', tab === 'brain');
@@ -507,11 +572,7 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ display_name: name })
         });
-        if (res.ok) {
-          window.location.reload();
-        } else {
-          alert('Failed to update name.');
-        }
+        if (res.ok) window.location.reload();
       } catch (e) {
         alert(e.message);
       }
@@ -531,9 +592,82 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
 
     function handleKey(e) { if (e.key === 'Enter') sendChat(); }
 
-    function resetChat() {
-      chatHistory = [];
-      document.getElementById('chatStream').innerHTML = '<div class="msg msg-bot">⚡ New topic started. What would you like to explore?</div>';
+    function quickPrompt(text) {
+      document.getElementById('chatInput').value = text;
+      sendChat();
+    }
+
+    async function resetChat() {
+      await fetch('/api/clear-history', { method: 'POST' });
+      document.getElementById('chatStream').innerHTML = '<div class="msg msg-bot">⚡ New conversation started. What would you like to explore?</div>';
+    }
+
+    function handleImagePicked(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        attachedImageBase64 = e.target.result;
+        document.getElementById('imageThumb').src = attachedImageBase64;
+        document.getElementById('previewTray').style.display = 'flex';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearAttachedImage() {
+      attachedImageBase64 = null;
+      document.getElementById('previewTray').style.display = 'none';
+      document.getElementById('imgInput').value = '';
+    }
+
+    function toggleVoice() {
+      const micBtn = document.getElementById('micBtn');
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Speech recognition not supported in this browser.");
+        return;
+      }
+
+      if (isRecording) {
+        recognition.stop();
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        isRecording = true;
+        micBtn.classList.add('recording');
+      };
+
+      recognition.onresult = (e) => {
+        const transcript = e.results[0][0].transcript;
+        document.getElementById('chatInput').value = transcript;
+      };
+
+      recognition.onerror = () => {
+        isRecording = false;
+        micBtn.classList.remove('recording');
+      };
+
+      recognition.onend = () => {
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        if (document.getElementById('chatInput').value.trim()) {
+          sendChat();
+        }
+      };
+
+      recognition.start();
+    }
+
+    function speakText(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const clean = text.replace(/<[^>]*>?/gm, '').replace(/[*#`]/g, '');
+      const utter = new SpeechSynthesisUtterance(clean);
+      window.speechSynthesis.speak(utter);
     }
 
     async function sendChat() {
@@ -541,45 +675,92 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
       const text = input.value.trim();
       const sendBtn = document.getElementById('sendBtn');
       const stream = document.getElementById('chatStream');
-      if (!text) return;
+      const imagePayload = attachedImageBase64;
+
+      if (!text && !imagePayload) return;
 
       const userBubble = document.createElement('div');
       userBubble.className = 'msg msg-user';
-      userBubble.innerText = text;
+      if (imagePayload) {
+        userBubble.innerHTML = `<img src="${imagePayload}" class="msg-img-preview">` + (text ? `<div>${text}</div>` : '');
+      } else {
+        userBubble.innerText = text;
+      }
       stream.appendChild(userBubble);
 
-      chatHistory.push({ role: "user", parts: [{ text: text }] });
       input.value = "";
+      clearAttachedImage();
       sendBtn.disabled = true;
 
       const botBubble = document.createElement('div');
       botBubble.className = 'msg msg-bot';
-      botBubble.innerHTML = "<em>⚡ Deep thinking...</em>";
+      botBubble.innerHTML = `
+        <details class="thought-details" id="currentThoughtDetails" style="display: none;">
+          <summary class="thought-summary">🧠 Deep Thought Process</summary>
+          <div class="thought-content" id="currentThought"></div>
+        </details>
+        <div class="content-text" id="currentAnswer"><em>⚡ Thinking...</em></div>
+      `;
       stream.appendChild(botBubble);
       stream.scrollTop = stream.scrollHeight;
 
+      let thoughtBuffer = "";
+      let answerBuffer = "";
+      let inThought = false;
+
       try {
-        const response = await fetch('/ask', {
+        const response = await fetch('/ask-stream', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ history: chatHistory })
+          body: JSON.stringify({ prompt: text, image: imagePayload })
         });
-        const data = await response.json();
-        if (data.answer) {
-          let innerHtml = "";
-          if (data.thinking) {
-            innerHtml += `
-              <details class="thought-details">
-                <summary class="thought-summary">🧠 Deep Thought Process</summary>
-                <div class="thought-content">${renderBasicMarkdown(data.thinking)}</div>
-              </details>
-            `;
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        const thoughtDetails = botBubble.querySelector('#currentThoughtDetails');
+        const thoughtEl = botBubble.querySelector('#currentThought');
+        const answerEl = botBubble.querySelector('#currentAnswer');
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const payload = line.replace('data: ', '').trim();
+              if (payload === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(payload);
+                const delta = parsed.delta || '';
+
+                if (delta.includes('<thought>')) {
+                  inThought = true;
+                  thoughtDetails.style.display = 'block';
+                  continue;
+                }
+                if (delta.includes('</thought>')) {
+                  inThought = false;
+                  answerEl.innerHTML = '';
+                  continue;
+                }
+
+                if (inThought) {
+                  thoughtBuffer += delta;
+                  thoughtEl.innerText = thoughtBuffer;
+                } else {
+                  answerBuffer += delta;
+                  answerEl.innerHTML = renderBasicMarkdown(answerBuffer);
+                }
+                stream.scrollTop = stream.scrollHeight;
+              } catch (e) {}
+            }
           }
-          innerHtml += renderBasicMarkdown(data.answer);
-          botBubble.innerHTML = innerHtml;
-          chatHistory.push({ role: "model", parts: [{ text: data.answer }] });
-        } else {
-          botBubble.innerHTML = `<span style="color:#f87171;">${data.error || "No response."}</span>`;
+        }
+
+        if (localStorage.getItem('gelo_tts') === 'true' && answerBuffer) {
+          speakText(answerBuffer);
         }
       } catch (err) {
         botBubble.innerHTML = `<span style="color:#f87171;">Connection error: ${err.message}</span>`;
@@ -866,6 +1047,17 @@ def update_profile():
     session["display_name"] = new_name
     return jsonify({"status": "updated"})
 
+@app.route("/api/clear-history", methods=["POST"])
+def clear_history():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM messages WHERE username = ?", (session["user"],))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "cleared"})
+
 @app.route("/logout")
 def logout():
     session.pop("user", None)
@@ -878,25 +1070,92 @@ def index():
     if "user" not in session:
         return redirect("/login")
     display_name = session.get("display_name") or clean_name(session["user"])
+
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT role, text, thinking FROM messages WHERE username = ? ORDER BY id ASC LIMIT 50", (session["user"],))
+    rows = c.fetchall()
+    conn.close()
+
+    history = [{"role": r[0], "text": r[1], "thinking": r[2]} for r in rows]
+
+    # Quick manual replace for lightweight rendering
     rendered = MAIN_TEMPLATE.replace("{{ display_name }}", display_name)
+    if history:
+        rendered = rendered.replace("{% for msg in history %}", "")
+        rendered = rendered.replace("{% else %}", "<!--")
+        rendered = rendered.replace("{% endfor %}", "-->")
+        items_html = ""
+        for m in history:
+            cls = "msg-user" if m["role"] == "user" else "msg-bot"
+            th_block = ""
+            if m["thinking"]:
+                th_block = f'<details class="thought-details"><summary class="thought-summary">🧠 Deep Thought Process</summary><div class="thought-content">{m["thinking"]}</div></details>'
+            items_html += f'<div class="msg {cls}">{th_block}<div class="content-text">{m["text"]}</div></div>'
+        rendered = re.sub(r'<div class="chat-stream" id="chatStream">[\s\S]*?</div>', f'<div class="chat-stream" id="chatStream">{items_html}</div>', rendered, count=1)
+    else:
+        rendered = rendered.replace("{% for msg in history %}", "<!--")
+        rendered = rendered.replace("{% else %}", "-->")
+        rendered = rendered.replace("{% endfor %}", "")
+
     resp = make_response(rendered)
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return resp
 
-@app.route("/ask", methods=["POST"])
-def ask():
+# --- SSE STREAMING & VISION ROUTE ---
+@app.route("/ask-stream", methods=["POST"])
+def ask_stream():
     if "user" not in session:
         return jsonify({"error": "Unauthorized"}), 401
 
     req_data = request.json or {}
-    history = req_data.get("history", [])
-    if not history:
+    user_prompt = req_data.get("prompt", "").strip()
+    image_base64 = req_data.get("image", None)
+
+    if not user_prompt and not image_base64:
         return jsonify({"error": "Empty message"}), 400
     if not GEMINI_API_KEY:
         return jsonify({"error": "GEMINI_API_KEY missing."}), 500
 
+    username = session["user"]
+    display_name = session.get("display_name") or clean_name(username)
     now_utc = datetime.now(timezone.utc).strftime('%A, %B %d, %Y, %H:%M:%S UTC')
-    display_name = session.get("display_name") or clean_name(session["user"])
+
+    # Fetch past 6 turns from SQLite
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT role, text FROM messages WHERE username = ? ORDER BY id DESC LIMIT 6", (username,))
+    past_rows = c.fetchall()
+    past_rows.reverse()
+
+    # Save incoming user message
+    c.execute("INSERT INTO messages (username, role, text) VALUES (?, ?, ?)", 
+              (username, "user", user_prompt if user_prompt else "[Attached Image]"))
+    conn.commit()
+    conn.close()
+
+    contents = []
+    for r in past_rows:
+        role = "user" if r[0] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": r[1]}]})
+
+    # Prepare current turn (with multimodal vision if provided)
+    current_parts = []
+    if image_base64 and "," in image_base64:
+        header, b64data = image_base64.split(",", 1)
+        mime = "image/jpeg"
+        if "image/png" in header: mime = "image/png"
+        elif "image/webp" in header: mime = "image/webp"
+        current_parts.append({
+            "inline_data": {
+                "mime_type": mime,
+                "data": b64data
+            }
+        })
+    if user_prompt:
+        current_parts.append({"text": user_prompt})
+
+    contents.append({"role": "user", "parts": current_parts})
 
     payload = {
         "system_instruction": {
@@ -909,29 +1168,57 @@ def ask():
                 )
             }]
         },
-        "contents": history[-8:]
+        "contents": contents
     }
 
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse"
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
-    for model in ["gemini-3.8-flash", "gemini-3.6-flash"]:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        try:
-            res = requests.post(url, headers=headers, json=payload, timeout=20)
-            data = res.json()
-            if "candidates" in data and data["candidates"]:
-                raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-                thought_match = re.search(r'<thought>(.*?)</thought>', raw_text, re.DOTALL)
-                if thought_match:
-                    thinking = thought_match.group(1).strip()
-                    answer = re.sub(r'<thought>.*?</thought>', '', raw_text, flags=re.DOTALL).strip()
-                else:
-                    thinking = "Synthesized context and prepared response."
-                    answer = raw_text.strip()
-                return jsonify({"thinking": thinking, "answer": answer})
-        except Exception:
-            continue
 
-    return jsonify({"error": "Service busy. Please try again."}), 503
+    def generate():
+        full_text = ""
+        try:
+            with requests.post(url, headers=headers, json=payload, stream=True, timeout=35) as res:
+                for line in res.iter_lines():
+                    if not line:
+                        continue
+                    line_str = line.decode("utf-8")
+                    if line_str.startswith("data: "):
+                        data_json = line_str[6:]
+                        try:
+                            chunk = json.loads(data_json)
+                            candidates = chunk.get("candidates", [])
+                            if candidates:
+                                parts = candidates[0].get("content", {}).get("parts", [])
+                                for p in parts:
+                                    txt = p.get("text", "")
+                                    if txt:
+                                        full_text += txt
+                                        yield f"data: {json.dumps({'delta': txt})}\\n\\n"
+                        except json.JSONDecodeError:
+                            continue
+            yield "data: [DONE]\\n\\n"
+
+            # Parse thought vs final text and persist to SQLite
+            thought_match = re.search(r'<thought>(.*?)</thought>', full_text, re.DOTALL)
+            if thought_match:
+                thinking = thought_match.group(1).strip()
+                final_answer = re.sub(r'<thought>.*?</thought>', '', full_text, flags=re.DOTALL).strip()
+            else:
+                thinking = None
+                final_answer = full_text.strip()
+
+            c_conn = sqlite3.connect(DB_FILE)
+            c_cur = c_conn.cursor()
+            c_cur.execute("INSERT INTO messages (username, role, text, thinking) VALUES (?, ?, ?, ?)",
+                          (username, "model", final_answer, thinking))
+            c_conn.commit()
+            c_conn.close()
+
+        except Exception as e:
+            yield f"data: {json.dumps({'delta': f'Error: {str(e)}'})}\\n\\n"
+            yield "data: [DONE]\\n\\n"
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
 @app.route("/identify", methods=["POST"])
 def identify():
