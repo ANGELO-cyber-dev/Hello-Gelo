@@ -1,15 +1,180 @@
 import os
-import re
+import sqlite3
 import requests
 from datetime import datetime, timezone
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, session, redirect
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+app.secret_key = os.getenv("SECRET_KEY", "gelo_production_secret_key_88992211")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 AUDD_API_KEY = os.getenv("AUDD_API_KEY", "").strip()
+DB_FILE = "users.db"
 
-HTML_PAGE = """<!DOCTYPE html>
+# Initialize SQLite database for registered users
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            display_name TEXT,
+            password_hash TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
+
+def clean_name(raw_val, custom_display=None):
+    if custom_display and custom_display.strip():
+        return custom_display.strip()
+    if "@" in raw_val:
+        return raw_val.split("@")[0]
+    return raw_val
+
+# --- AUTH VIEW ---
+AUTH_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>HELLO Gelo — Access</title>
+  <style>
+    :root {
+      --bg: #090a0f;
+      --surface: #101319;
+      --surface-border: rgba(255, 255, 255, 0.08);
+      --accent: #38bdf8;
+      --text: #f8fafc;
+      --text-muted: #738096;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; }
+    .brand-mark { font-size: 24px; color: var(--accent); }
+    .brand-title { font-size: 20px; font-weight: 700; letter-spacing: 1px; color: #fff; text-transform: uppercase; }
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      padding: 24px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+    }
+    .auth-nav { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--surface-border); margin-bottom: 20px; }
+    .auth-tab {
+      padding: 10px 0; text-align: center; font-size: 13px; font-weight: 600;
+      color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent;
+      background: none; border-top: none; border-left: none; border-right: none;
+    }
+    .auth-tab.active { color: #fff; border-bottom-color: var(--accent); }
+    .form-group { margin-bottom: 14px; }
+    .form-label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+    .form-input {
+      width: 100%; background: #0c0e14; border: 1px solid var(--surface-border);
+      color: #fff; padding: 11px 13px; border-radius: 8px; font-size: 13.5px; outline: none;
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .auth-btn {
+      width: 100%; background: #fff; color: #090a0f; border: none; padding: 12px;
+      border-radius: 8px; font-size: 13.5px; font-weight: 700; cursor: pointer; margin-top: 6px;
+    }
+    .error-box {
+      font-size: 12px; color: #f87171; background: rgba(248, 113, 113, 0.08);
+      border: 1px solid rgba(248, 113, 113, 0.2); padding: 8px 12px; border-radius: 6px; margin-bottom: 14px; display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="brand">
+    <span class="brand-mark">⚡</span>
+    <span class="brand-title">HELLO Gelo</span>
+  </div>
+
+  <div class="auth-card">
+    <div class="auth-nav">
+      <button class="auth-tab" id="tabLogin" onclick="setMode('login')">Sign In</button>
+      <button class="auth-tab active" id="tabRegister" onclick="setMode('register')">Register</button>
+    </div>
+
+    <div id="authError" class="error-box"></div>
+
+    <form onsubmit="handleAuth(event)">
+      <div class="form-group" id="displayNameGroup">
+        <label class="form-label">Display Name / Nickname</label>
+        <input type="text" class="form-input" id="authDisplayName" placeholder="e.g. Angelo">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Username or Email</label>
+        <input type="text" class="form-input" id="authUsername" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" class="form-input" id="authPassword" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="auth-btn" id="submitBtn">Create Account</button>
+    </form>
+  </div>
+
+  <script>
+    let mode = 'register';
+    function setMode(m) {
+      mode = m;
+      document.getElementById('tabLogin').classList.toggle('active', mode === 'login');
+      document.getElementById('tabRegister').classList.toggle('active', mode === 'register');
+      document.getElementById('submitBtn').innerText = mode === 'login' ? 'Sign In' : 'Create Account';
+      document.getElementById('displayNameGroup').style.display = mode === 'register' ? 'block' : 'none';
+      document.getElementById('authError').style.display = 'none';
+    }
+
+    async function handleAuth(e) {
+      e.preventDefault();
+      const username = document.getElementById('authUsername').value.trim();
+      const password = document.getElementById('authPassword').value;
+      const displayName = document.getElementById('authDisplayName').value.trim();
+      const errBox = document.getElementById('authError');
+      errBox.style.display = 'none';
+
+      const endpoint = mode === 'login' ? '/api/login' : '/api/register';
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ username, password, display_name: displayName })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          window.location.href = '/';
+        } else {
+          errBox.innerText = data.error || 'Authentication failed.';
+          errBox.style.display = 'block';
+        }
+      } catch (err) {
+        errBox.innerText = 'Network error: ' + err.message;
+        errBox.style.display = 'block';
+      }
+    }
+  </script>
+</body>
+</html>
+"""
+
+# --- MAIN APP VIEW ---
+MAIN_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -36,22 +201,36 @@ HTML_PAGE = """<!DOCTYPE html>
       align-items: center;
       padding: 14px 10px 18px;
     }
-    .brand {
+    .top-bar {
+      width: 100%;
+      max-width: 480px;
       display: flex;
+      justify-content: space-between;
       align-items: center;
-      gap: 8px;
       margin-bottom: 12px;
-      cursor: pointer;
     }
-    .brand-icon { font-size: 24px; filter: drop-shadow(0 0 12px var(--accent)); }
+    .brand { display: flex; align-items: center; gap: 8px; }
+    .brand-icon { font-size: 22px; filter: drop-shadow(0 0 10px var(--accent)); }
     .brand-title {
-      font-size: 22px;
+      font-size: 19px;
       font-weight: 800;
       letter-spacing: -0.5px;
       background: linear-gradient(135deg, #ffffff 30%, #38bdf8 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
+    .user-pill {
+      background: #141822;
+      border: 1px solid var(--card-border);
+      color: #cbd5e1;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .signout-btn { color: #f87171; text-decoration: underline; cursor: pointer; }
     .tab-bar {
       display: flex;
       background: #0f1218;
@@ -69,7 +248,7 @@ HTML_PAGE = """<!DOCTYPE html>
       color: var(--text-muted);
       padding: 9px 12px;
       border-radius: 9px;
-      font-size: 13.5px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
       display: flex;
@@ -105,20 +284,18 @@ HTML_PAGE = """<!DOCTYPE html>
     .chat-stream { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
     .msg { max-width: 88%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.55; word-break: break-word; }
     .msg-user { align-self: flex-end; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border-bottom-right-radius: 4px; }
-    .msg-bot { align-self: flex-start; background: #0f1218; border: 1px solid var(--card-border); color: #e2e8f0; border-bottom-left-radius: 4px; width: 100%; max-width: 95%; }
+    .msg-bot { align-self: flex-start; background: #0c0e14; border: 1px solid var(--card-border); color: #e2e8f0; border-bottom-left-radius: 4px; width: 100%; max-width: 95%; }
     .msg-bot strong { color: #fff; }
     .msg-bot code { background: rgba(0, 0, 0, 0.5); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13px; }
     .msg-bot pre { background: rgba(0, 0, 0, 0.6); padding: 10px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
     .msg-bot pre code { background: transparent; padding: 0; }
-    .thought-details { margin-bottom: 8px; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; overflow: hidden; font-size: 12px; }
-    .thought-summary { padding: 6px 10px; cursor: pointer; color: var(--accent); font-weight: 600; user-select: none; }
-    .thought-content { padding: 8px 10px; color: #94a3b8; border-top: 1px solid rgba(255, 255, 255, 0.05); white-space: pre-wrap; }
     .chat-input-bar { padding: 10px; border-top: 1px solid var(--card-border); background: #0c0e14; display: flex; gap: 8px; align-items: center; }
-    .chat-input { flex: 1; background: #141822; border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text); padding: 10px 14px; border-radius: 12px; font-size: 14px; outline: none; }
+    .chat-input { flex: 1; background: #141822; border: 1px solid var(--card-border); color: var(--text); padding: 10px 14px; border-radius: 12px; font-size: 14px; outline: none; }
     .chat-input:focus { border-color: var(--accent); }
     .send-btn { background: #2563eb; border: none; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
     .send-btn:disabled { opacity: 0.5; }
-    /* Radar UI */
+    
+    /* Radar */
     .radar-wrapper { display: flex; flex-direction: column; align-items: center; padding: 24px 16px 20px; }
     .pulse-container { position: relative; width: 140px; height: 140px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
     .radar-btn { position: relative; z-index: 2; width: 108px; height: 108px; border-radius: 50%; background: linear-gradient(145deg, #0ea5e9, #2563eb); box-shadow: 0 0 30px var(--accent-glow); display: flex; align-items: center; justify-content: center; cursor: pointer; border: none; color: #fff; font-size: 40px; transition: transform 0.1s ease-out; }
@@ -126,9 +303,9 @@ HTML_PAGE = """<!DOCTYPE html>
     .is-listening .pulse-ring { animation: ripple 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite; }
     @keyframes ripple { 0% { transform: scale(0.7); opacity: 0.85; } 100% { transform: scale(1.6); opacity: 0; } }
     .radar-status { font-size: 15px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.3px; text-align: center; min-height: 24px; }
-    .track-result-card { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 14px; margin-top: 18px; display: flex; flex-direction: column; gap: 12px; width: 100%; }
+    .track-result-card { background: #131720; border: 1px solid var(--card-border); border-radius: 16px; padding: 14px; margin-top: 18px; display: flex; flex-direction: column; gap: 12px; width: 100%; }
     .track-main { display: flex; align-items: center; gap: 14px; }
-    .track-artwork { width: 62px; height: 62px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: #1e293b; }
+    .track-artwork { width: 62px; height: 62px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: #0c0e14; }
     .track-meta { flex: 1; overflow: hidden; }
     .track-name { font-size: 15px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .track-artist { font-size: 13px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -140,9 +317,15 @@ HTML_PAGE = """<!DOCTYPE html>
 </head>
 <body>
 
-  <div class="brand">
-    <span class="brand-icon">⚡</span>
-    <span class="brand-title">HELLO Gelo</span>
+  <div class="top-bar">
+    <div class="brand">
+      <span class="brand-icon">⚡</span>
+      <span class="brand-title">HELLO Gelo</span>
+    </div>
+    <div class="user-pill">
+      <span>{{ display_name }}</span>
+      <span class="signout-btn" onclick="window.location.href='/logout'">Sign Out</span>
+    </div>
   </div>
 
   <div class="tab-bar">
@@ -156,7 +339,7 @@ HTML_PAGE = """<!DOCTYPE html>
       <span class="chat-reset-btn" onclick="resetChat()">New Topic</span>
     </div>
     <div class="chat-stream" id="chatStream">
-      <div class="msg msg-bot">⚡ Hi! What would you like to explore or learn today?</div>
+      <div class="msg msg-bot">⚡ Hi {{ display_name }}! What would you like to explore or learn today?</div>
     </div>
     <div class="chat-input-bar">
       <input type="text" class="chat-input" id="chatInput" placeholder="Reply or ask a question..." onkeydown="handleKey(event)">
@@ -233,7 +416,7 @@ HTML_PAGE = """<!DOCTYPE html>
 
       const botBubble = document.createElement('div');
       botBubble.className = 'msg msg-bot';
-      botBubble.innerHTML = "<em>⚡ Deep thinking...</em>";
+      botBubble.innerHTML = "<em>Reflecting...</em>";
       stream.appendChild(botBubble);
       stream.scrollTop = stream.scrollHeight;
 
@@ -245,17 +428,7 @@ HTML_PAGE = """<!DOCTYPE html>
         });
         const data = await response.json();
         if (data.answer) {
-          let innerHtml = "";
-          if (data.thinking) {
-            innerHtml += `
-              <details class="thought-details">
-                <summary class="thought-summary">🧠 Deep Thought Process</summary>
-                <div class="thought-content">${renderBasicMarkdown(data.thinking)}</div>
-              </details>
-            `;
-          }
-          innerHtml += renderBasicMarkdown(data.answer);
-          botBubble.innerHTML = innerHtml;
+          botBubble.innerHTML = renderBasicMarkdown(data.answer);
           chatHistory.push({ role: "model", parts: [{ text: data.answer }] });
         } else {
           botBubble.innerHTML = `<span style="color:#f87171;">${data.error || "No response."}</span>`;
@@ -271,7 +444,7 @@ HTML_PAGE = """<!DOCTYPE html>
     function getCover(track) {
       if (track.spotify?.album?.images?.[0]) return track.spotify.album.images[0].url;
       if (track.apple_music?.artwork) return track.apple_music.artwork.url.replace('{w}x{h}', '300x300');
-      return 'https://via.placeholder.com/150/1e293b/38bdf8?text=Song';
+      return 'https://via.placeholder.com/150/11141b/cbd5e1?text=Song';
     }
 
     function renderShazamResult(track) {
@@ -451,14 +624,82 @@ HTML_PAGE = """<!DOCTYPE html>
 </html>
 """
 
+# --- AUTH ROUTES ---
+@app.route("/login")
+def login_page():
+    if "user" in session:
+        return redirect("/")
+    resp = make_response(AUTH_TEMPLATE)
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
+
+@app.route("/api/register", methods=["POST"])
+def register():
+    data = request.json or {}
+    username = data.get("username", "").strip().lower()
+    password = data.get("password", "").strip()
+    display_name = data.get("display_name", "").strip()
+
+    if not username or not password:
+        return jsonify({"error": "Username/Email and password required."}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters."}), 400
+
+    resolved_display = clean_name(username, display_name)
+
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO users (username, display_name, password_hash) VALUES (?, ?, ?)", 
+                  (username, resolved_display, generate_password_hash(password)))
+        conn.commit()
+        session["user"] = username
+        session["display_name"] = resolved_display
+        return jsonify({"status": "registered"})
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "Account already exists. Please Sign In."}), 409
+    finally:
+        conn.close()
+
+@app.route("/api/login", methods=["POST"])
+def login():
+    data = request.json or {}
+    username = data.get("username", "").strip().lower()
+    password = data.get("password", "").strip()
+
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT password_hash, display_name FROM users WHERE LOWER(username) = LOWER(?)", (username,))
+    row = c.fetchone()
+    conn.close()
+
+    if row and check_password_hash(row[0], password):
+        session["user"] = username
+        session["display_name"] = row[1] if row[1] else clean_name(username)
+        return jsonify({"status": "logged_in"})
+    return jsonify({"error": "Invalid username or password."}), 401
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+# --- APP HOME & CORE API ---
 @app.route("/")
 def index():
-    resp = make_response(HTML_PAGE)
+    if "user" not in session:
+        return redirect("/login")
+    display_name = session.get("display_name") or clean_name(session["user"])
+    rendered = MAIN_TEMPLATE.replace("{{ display_name }}", display_name)
+    resp = make_response(rendered)
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return resp
 
 @app.route("/ask", methods=["POST"])
 def ask():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
     req_data = request.json or {}
     history = req_data.get("history", [])
     if not history:
@@ -466,13 +707,17 @@ def ask():
     if not GEMINI_API_KEY:
         return jsonify({"error": "GEMINI_API_KEY missing."}), 500
 
+    username = session["user"]
+    display_name = session.get("display_name") or clean_name(username)
     now_utc = datetime.now(timezone.utc).strftime('%A, %B %d, %Y, %H:%M:%S UTC')
+
     payload = {
         "system_instruction": {
             "parts": [{
                 "text": (
-                    f"You are Gelo, an elite conversational AI companion. The current reference time is {now_utc}. "
-                    "Respond with high intelligence and swift clarity in clean markdown."
+                    f"You are Gelo, a high-speed AI companion. The user's name is {display_name}. "
+                    f"The current reference time is {now_utc}. "
+                    "Respond with speed, high intelligence, and elegant precision in clean markdown."
                 )
             }]
         },
@@ -484,8 +729,7 @@ def ask():
     }
 
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
-    
-    # Priority list: fast, stable production endpoints
+
     for model in ["gemini-2.5-flash", "gemini-1.5-flash"]:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
@@ -501,6 +745,8 @@ def ask():
 
 @app.route("/identify", methods=["POST"])
 def identify():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
     if "file" not in request.files:
         return jsonify({"error": {"error_message": "Missing audio file"}}), 400
 
