@@ -1,6 +1,7 @@
 import os
+import json
 import requests
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, Response, stream_with_context
 
 app = Flask(__name__)
 
@@ -26,7 +27,6 @@ HTML_TEMPLATE = """
       --accent: #38bdf8;
       --accent-glow: rgba(56, 189, 248, 0.35);
       --primary: #2563eb;
-      --success: #10b981;
       --text: #f1f5f9;
       --text-muted: #94a3b8;
     }
@@ -139,7 +139,6 @@ HTML_TEMPLATE = """
       border-radius: 14px;
       font-size: 14.5px;
       outline: none;
-      transition: border-color 0.2s;
       resize: vertical;
       margin-bottom: 14px;
     }
@@ -169,14 +168,8 @@ HTML_TEMPLATE = """
       transition: all 0.15s ease;
     }
 
-    .btn:active {
-      transform: scale(0.97);
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      pointer-events: none;
-    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; pointer-events: none; }
 
     .btn-primary {
       background: linear-gradient(135deg, #2563eb, #1d4ed8);
@@ -188,7 +181,6 @@ HTML_TEMPLATE = """
       box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
     }
 
-    /* Output & Markdown */
     .ai-output {
       margin-top: 16px;
       padding-top: 14px;
@@ -196,6 +188,7 @@ HTML_TEMPLATE = """
       font-size: 14.5px;
       line-height: 1.65;
       color: #cbd5e1;
+      word-break: break-word;
     }
 
     .ai-output p { margin-bottom: 10px; }
@@ -209,15 +202,20 @@ HTML_TEMPLATE = """
       color: var(--accent);
     }
 
-    .error-box {
-      color: #f87171;
-      background: rgba(239, 68, 68, 0.1);
-      padding: 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(239, 68, 68, 0.2);
+    .cursor-blink::after {
+      content: '▋';
+      display: inline-block;
+      color: var(--accent);
+      animation: blink 0.8s infinite;
+      margin-left: 2px;
     }
 
-    /* Shazam Visualizer UI */
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* Radar UI */
     .radar-wrapper {
       display: flex;
       flex-direction: column;
@@ -289,7 +287,6 @@ HTML_TEMPLATE = """
       text-decoration: underline;
     }
 
-    /* Results Card */
     .track-result-card {
       background: rgba(30, 41, 59, 0.6);
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -311,11 +308,7 @@ HTML_TEMPLATE = """
       background: #1e293b;
     }
 
-    .track-meta {
-      flex: 1;
-      overflow: hidden;
-    }
-
+    .track-meta { flex: 1; overflow: hidden; }
     .track-name {
       font-size: 15px;
       font-weight: 700;
@@ -334,12 +327,7 @@ HTML_TEMPLATE = """
       text-overflow: ellipsis;
     }
 
-    .store-badges {
-      display: flex;
-      gap: 8px;
-      margin-top: 8px;
-    }
-
+    .store-badges { display: flex; gap: 8px; margin-top: 8px; }
     .store-badge {
       font-size: 11px;
       font-weight: 600;
@@ -385,9 +373,9 @@ HTML_TEMPLATE = """
 
   <!-- CONVERSATIONAL VIEW -->
   <div class="glass-card active-view" id="viewBrain">
-    <textarea id="promptInput" rows="3" placeholder="Ask Gelo anything...">Hello Gelo</textarea>
+    <textarea id="promptInput" rows="3" placeholder="Ask Gelo anything...">Teach me python programming</textarea>
     <div class="btn-row">
-      <button class="btn btn-primary" id="askBtn" onclick="askAi()">Ask Gelo</button>
+      <button class="btn btn-primary" id="askBtn" onclick="askAiStream()">Ask Gelo</button>
       <button class="btn btn-green" onclick="readAloud()">🗣️ Read</button>
     </div>
     <div id="aiOutput" class="ai-output" style="display: none;"></div>
@@ -428,31 +416,55 @@ HTML_TEMPLATE = """
       document.getElementById('tabMusic').classList.toggle('active', tab === 'music');
     }
 
-    async function askAi() {
+    // High-speed SSE token streaming
+    async function askAiStream() {
       const prompt = document.getElementById('promptInput').value.trim();
       const output = document.getElementById('aiOutput');
       const askBtn = document.getElementById('askBtn');
       if (!prompt) return;
 
       output.style.display = "block";
-      output.innerHTML = "<em>Thinking...</em>";
+      output.innerHTML = "";
+      output.classList.add('cursor-blink');
       askBtn.disabled = true;
 
+      let fullText = "";
+
       try {
-        const response = await fetch('/ask', {
+        const response = await fetch('/stream', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ prompt })
         });
-        const data = await response.json();
-        if (data.answer) {
-          output.innerHTML = marked.parse(data.answer);
-        } else {
-          output.innerHTML = `<div class="error-box">${data.error || "No response received."}</div>`;
+
+        if (!response.ok) {
+          const errData = await response.json();
+          output.innerHTML = errData.error || "Generation error.";
+          output.classList.remove('cursor-blink');
+          askBtn.disabled = false;
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const textPiece = line.replace('data: ', '');
+              fullText += textPiece;
+              output.innerHTML = marked.parse(fullText);
+            }
+          }
         }
       } catch (err) {
-        output.innerHTML = `<div class="error-box">Connection error: ${err.message}</div>`;
+        output.innerHTML = "Stream error: " + err.message;
       } finally {
+        output.classList.remove('cursor-blink');
         askBtn.disabled = false;
       }
     }
@@ -648,34 +660,46 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE)
 
-@app.route("/ask", methods=["POST"])
-def ask():
+@app.route("/stream", methods=["POST"])
+def stream():
     prompt = request.json.get("prompt", "")
     if not prompt:
         return jsonify({"error": "Empty prompt"}), 400
     if not GEMINI_API_KEY:
-        return jsonify({"error": "GEMINI_API_KEY is missing on Render."}), 500
+        return jsonify({"error": "GEMINI_API_KEY missing on Render."}), 500
 
-    headers = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY
+    # System instruction tailored for instant, high-signal, zero-fluff answers
+    payload = {
+        "system_instruction": {
+            "parts": [{
+                "text": "You are Gelo, a high-speed, expert AI assistant. Deliver sharp, actionable, zero-fluff responses. Start with the core answer immediately in sentence 1. Use formatted markdown and code blocks when helpful."
+            }]
+        },
+        "contents": [{"parts": [{"text": prompt}]}]
     }
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    for model in ["gemini-2.5-flash", "gemini-3.6-flash"]:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        try:
-            res = requests.post(url, headers=headers, json=payload, timeout=18)
-            data = res.json()
-            if "candidates" in data and data["candidates"]:
-                text = data["candidates"][0]["content"]["parts"][0]["text"]
-                return jsonify({"answer": text})
-            elif "error" in data:
-                continue
-        except Exception:
-            continue
+    def generate():
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
+        headers = {"Content-Type": "application/json"}
+        
+        with requests.post(url, headers=headers, json=payload, stream=True, timeout=25) as r:
+            for raw_line in r.iter_lines(decode_unicode=True):
+                if raw_line and raw_line.startswith("data: "):
+                    data_str = raw_line.replace("data: ", "").strip()
+                    try:
+                        chunk_json = json.loads(data_str)
+                        candidates = chunk_json.get("candidates", [])
+                        if candidates and "content" in candidates[0]:
+                            parts = candidates[0]["content"].get("parts", [])
+                            for part in parts:
+                                text_fragment = part.get("text", "")
+                                if text_fragment:
+                                    # Forward each token to the client via SSE
+                                    yield f"data: {text_fragment}\n\n"
+                    except Exception:
+                        continue
 
-    return jsonify({"error": "Gemini servers are busy. Please try again."}), 503
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
 @app.route("/identify", methods=["POST"])
 def identify():
