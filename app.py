@@ -17,27 +17,24 @@ HTML_PAGE = """<!DOCTYPE html>
   <title>HELLO Gelo</title>
   <style>
     :root {
-      --bg: #07090e;
-      --card-bg: rgba(18, 24, 38, 0.85);
-      --card-border: rgba(255, 255, 255, 0.08);
+      --bg: #090a0f;
+      --card-bg: #101319;
+      --card-border: rgba(255, 255, 255, 0.07);
       --accent: #38bdf8;
-      --accent-glow: rgba(56, 189, 248, 0.35);
+      --accent-glow: rgba(56, 189, 248, 0.25);
       --primary: #2563eb;
-      --text: #f1f5f9;
-      --text-muted: #94a3b8;
+      --text: #f8fafc;
+      --text-muted: #738096;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
     body {
       background-color: var(--bg);
-      background-image: 
-        radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 85% 85%, rgba(37, 99, 235, 0.08) 0%, transparent 40%);
       color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 16px 12px 20px;
+      padding: 14px 10px 18px;
     }
     .brand {
       display: flex;
@@ -57,7 +54,7 @@ HTML_PAGE = """<!DOCTYPE html>
     }
     .tab-bar {
       display: flex;
-      background: rgba(15, 23, 42, 0.85);
+      background: #0f1218;
       border: 1px solid var(--card-border);
       padding: 4px;
       border-radius: 12px;
@@ -108,7 +105,7 @@ HTML_PAGE = """<!DOCTYPE html>
     .chat-stream { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
     .msg { max-width: 88%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.55; word-break: break-word; }
     .msg-user { align-self: flex-end; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border-bottom-right-radius: 4px; }
-    .msg-bot { align-self: flex-start; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--card-border); color: #e2e8f0; border-bottom-left-radius: 4px; width: 100%; max-width: 95%; }
+    .msg-bot { align-self: flex-start; background: #0f1218; border: 1px solid var(--card-border); color: #e2e8f0; border-bottom-left-radius: 4px; width: 100%; max-width: 95%; }
     .msg-bot strong { color: #fff; }
     .msg-bot code { background: rgba(0, 0, 0, 0.5); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13px; }
     .msg-bot pre { background: rgba(0, 0, 0, 0.6); padding: 10px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
@@ -116,8 +113,8 @@ HTML_PAGE = """<!DOCTYPE html>
     .thought-details { margin-bottom: 8px; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; overflow: hidden; font-size: 12px; }
     .thought-summary { padding: 6px 10px; cursor: pointer; color: var(--accent); font-weight: 600; user-select: none; }
     .thought-content { padding: 8px 10px; color: #94a3b8; border-top: 1px solid rgba(255, 255, 255, 0.05); white-space: pre-wrap; }
-    .chat-input-bar { padding: 10px; border-top: 1px solid var(--card-border); background: rgba(11, 15, 25, 0.95); display: flex; gap: 8px; align-items: center; }
-    .chat-input { flex: 1; background: rgba(18, 24, 38, 0.8); border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text); padding: 10px 14px; border-radius: 12px; font-size: 14px; outline: none; }
+    .chat-input-bar { padding: 10px; border-top: 1px solid var(--card-border); background: #0c0e14; display: flex; gap: 8px; align-items: center; }
+    .chat-input { flex: 1; background: #141822; border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text); padding: 10px 14px; border-radius: 12px; font-size: 14px; outline: none; }
     .chat-input:focus { border-color: var(--accent); }
     .send-btn { background: #2563eb; border: none; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
     .send-btn:disabled { opacity: 0.5; }
