@@ -12,190 +12,311 @@ HTML_TEMPLATE = """
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=no">
   <title>HELLO Gelo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
-    body {
-      background-color: #0b0f19;
-      color: #e6edf3;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    :root {
+      --bg: #07090e;
+      --card-bg: rgba(18, 24, 38, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.35);
+      --primary: #2563eb;
+      --success: #10b981;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
       margin: 0;
-      padding: 16px;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(37, 99, 235, 0.08) 0%, transparent 40%);
+      color: var(--text);
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
+      padding: 20px 16px 40px;
     }
-    .header {
-      font-size: 24px;
-      font-weight: 800;
-      color: #38bdf8;
-      margin: 12px 0 20px 0;
-      letter-spacing: 0.5px;
-    }
-    .card {
-      background: #111827;
-      border: 1px solid #1f2937;
-      border-radius: 16px;
-      padding: 18px;
-      width: 100%;
-      max-width: 440px;
-      margin-bottom: 20px;
-      box-sizing: border-box;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-    }
-    .card-title {
-      font-size: 15px;
-      font-weight: 700;
-      margin-bottom: 14px;
-      color: #94a3b8;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
+
+    .brand {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 10px;
+      margin: 8px 0 20px;
     }
+
+    .brand-icon {
+      font-size: 26px;
+      filter: drop-shadow(0 0 12px var(--accent));
+    }
+
+    .brand-title {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #ffffff 30%, #38bdf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .tab-bar {
+      display: flex;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--card-border);
+      padding: 4px;
+      border-radius: 14px;
+      width: 100%;
+      max-width: 440px;
+      margin-bottom: 18px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .tab-btn.active {
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .glass-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 20px;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      display: none;
+      animation: fadeIn 0.25s ease-out forwards;
+    }
+
+    .glass-card.active-view {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
     textarea {
       width: 100%;
-      background: #030712;
-      border: 1px solid #374151;
-      color: #f3f4f6;
-      padding: 12px;
-      border-radius: 10px;
-      font-size: 14px;
-      box-sizing: border-box;
-      margin-bottom: 12px;
+      background: rgba(8, 12, 22, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text);
+      padding: 14px;
+      border-radius: 14px;
+      font-size: 14.5px;
+      outline: none;
+      transition: border-color 0.2s;
       resize: vertical;
+      margin-bottom: 14px;
     }
+
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+    }
+
     .btn-row {
       display: flex;
       gap: 10px;
     }
-    button.action-btn {
-      background: #2563eb;
+
+    .btn {
       border: none;
-      color: #fff;
-      padding: 10px 16px;
-      border-radius: 8px;
-      font-size: 14px;
+      padding: 11px 18px;
+      border-radius: 12px;
+      font-size: 13.5px;
       font-weight: 600;
+      color: #fff;
       cursor: pointer;
-    }
-    button.btn-green {
-      background: #059669;
-    }
-    .output {
-      margin-top: 14px;
-      font-size: 14px;
-      line-height: 1.6;
-      color: #cbd5e1;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .error {
-      color: #f87171;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
     }
 
-    /* Shazam Radar & Visualizer */
-    .shazam-container {
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    }
+
+    .btn-green {
+      background: linear-gradient(135deg, #10b981, #059669);
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
+    }
+
+    /* Output & Markdown */
+    .ai-output {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--card-border);
+      font-size: 14.5px;
+      line-height: 1.65;
+      color: #cbd5e1;
+    }
+
+    .ai-output p { margin-bottom: 10px; }
+    .ai-output ul, .ai-output ol { padding-left: 20px; margin-bottom: 10px; }
+    .ai-output code {
+      background: rgba(0, 0, 0, 0.4);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 13px;
+      color: var(--accent);
+    }
+
+    .error-box {
+      color: #f87171;
+      background: rgba(239, 68, 68, 0.1);
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    /* Shazam Visualizer UI */
+    .radar-wrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 16px 0 6px 0;
+      padding: 28px 0 16px;
     }
-    .pulse-wrapper {
+
+    .pulse-container {
       position: relative;
-      width: 130px;
-      height: 130px;
+      width: 140px;
+      height: 140px;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 14px;
+      margin-bottom: 20px;
     }
-    .shazam-circle {
+
+    .radar-btn {
       position: relative;
       z-index: 2;
-      width: 96px;
-      height: 96px;
+      width: 108px;
+      height: 108px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #0088ff, #0051ff);
+      background: linear-gradient(145deg, #0ea5e9, #2563eb);
+      box-shadow: 0 0 30px var(--accent-glow);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      box-shadow: 0 0 25px rgba(0, 136, 255, 0.45);
-      user-select: none;
+      border: none;
+      color: #fff;
+      font-size: 40px;
       transition: transform 0.1s ease-out;
     }
-    .shazam-icon {
-      font-size: 38px;
-      line-height: 1;
-    }
+
     .pulse-ring {
       position: absolute;
-      top: 0;
-      left: 0;
       width: 100%;
       height: 100%;
       border-radius: 50%;
-      border: 3px solid #0088ff;
+      border: 2px solid var(--accent);
       opacity: 0;
       pointer-events: none;
-      box-sizing: border-box;
     }
-    .pulsing .pulse-ring {
+
+    .is-listening .pulse-ring {
       animation: ripple 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
     }
+
     @keyframes ripple {
-      0% {
-        transform: scale(0.7);
-        opacity: 0.9;
-      }
-      100% {
-        transform: scale(1.6);
-        opacity: 0;
-      }
+      0% { transform: scale(0.7); opacity: 0.85; }
+      100% { transform: scale(1.6); opacity: 0; }
     }
-    .shazam-status {
+
+    .radar-status {
       font-size: 15px;
-      font-weight: 600;
-      color: #94a3b8;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.3px;
       text-align: center;
-      min-height: 22px;
+      min-height: 24px;
     }
-    .sub-link {
+
+    .upload-link {
       font-size: 12px;
       color: #64748b;
-      margin-top: 8px;
+      margin-top: 10px;
       cursor: pointer;
       text-decoration: underline;
     }
 
-    /* Track Cards */
-    .track-card {
-      margin-top: 14px;
-      width: 100%;
-      background: #1f2937;
-      border-radius: 12px;
-      padding: 12px;
+    /* Results Card */
+    .track-result-card {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 14px;
+      margin-top: 18px;
       display: flex;
       align-items: center;
-      gap: 12px;
-      box-sizing: border-box;
-      border-left: 4px solid #0088ff;
+      gap: 14px;
+      width: 100%;
     }
-    .track-cover {
-      width: 58px;
-      height: 58px;
-      border-radius: 8px;
-      background: #374151;
+
+    .track-artwork {
+      width: 62px;
+      height: 62px;
+      border-radius: 10px;
       object-fit: cover;
       flex-shrink: 0;
+      background: #1e293b;
     }
-    .track-info {
-      flex-grow: 1;
+
+    .track-meta {
+      flex: 1;
       overflow: hidden;
     }
-    .track-title {
+
+    .track-name {
       font-size: 15px;
       font-weight: 700;
       color: #fff;
@@ -203,91 +324,92 @@ HTML_TEMPLATE = """
       overflow: hidden;
       text-overflow: ellipsis;
     }
+
     .track-artist {
       font-size: 13px;
-      color: #94a3b8;
+      color: var(--text-muted);
+      margin-top: 2px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      margin-top: 2px;
     }
-    .track-links {
+
+    .store-badges {
       display: flex;
       gap: 8px;
-      margin-top: 6px;
+      margin-top: 8px;
     }
-    .track-link-btn {
+
+    .store-badge {
       font-size: 11px;
-      padding: 3px 8px;
-      border-radius: 5px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
       text-decoration: none;
       color: #fff;
       background: #0284c7;
-      font-weight: 600;
     }
-    .history-card {
-      background: #172033;
-      padding: 10px;
-      margin-top: 8px;
-      border-left: 3px solid #3b82f6;
+
+    .history-section {
+      width: 100%;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid var(--card-border);
     }
+
     .history-header {
-      font-size: 13px;
-      color: #60a5fa;
-      font-weight: 600;
-      margin-top: 16px;
-      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      margin-bottom: 8px;
     }
-    .clear-btn {
-      font-size: 11px;
-      color: #94a3b8;
-      cursor: pointer;
-      text-decoration: underline;
-    }
-    #filePicker {
-      display: none;
-    }
+
+    #filePicker { display: none; }
   </style>
 </head>
 <body>
 
-  <div class="header">⚡ HELLO Gelo</div>
-
-  <div class="card">
-    <div class="card-title">💬 Conversational Brain</div>
-    <textarea id="promptInput" rows="3" placeholder="Ask me anything...">Hello Gelo</textarea>
-    <div class="btn-row">
-      <button class="action-btn" id="askBtn" onclick="askAi()">Ask Gelo</button>
-      <button class="action-btn btn-green" onclick="readAloud()">🗣️ Read</button>
-    </div>
-    <div id="aiOutput" class="output"></div>
+  <div class="brand">
+    <span class="brand-icon">⚡</span>
+    <span class="brand-title">HELLO Gelo</span>
   </div>
 
-  <div class="card">
-    <div class="card-title">
-      <span>🎵 Music Recognition</span>
-    </div>
-    
-    <div class="shazam-container">
-      <div id="pulseWrapper" class="pulse-wrapper">
-        <div class="pulse-ring"></div>
-        <div class="pulse-ring" style="animation-delay: 0.6s;"></div>
-        <div class="shazam-circle" id="shazamBtn" onclick="startShazam()">
-          <span class="shazam-icon">⚡</span>
-        </div>
-      </div>
-      <div class="shazam-status" id="shazamStatus">Tap to Search</div>
-      <div class="sub-link" onclick="document.getElementById('filePicker').click()">or upload audio file</div>
-      <input type="file" id="filePicker" accept="audio/*" onchange="uploadAudio(this.files[0])">
-      <div id="resultContainer" style="width: 100%;"></div>
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tabBrain" onclick="switchView('brain')">💬 Brain</button>
+    <button class="tab-btn" id="tabMusic" onclick="switchView('music')">🎵 Music Search</button>
+  </div>
 
-      <div style="width: 100%;">
+  <!-- CONVERSATIONAL VIEW -->
+  <div class="glass-card active-view" id="viewBrain">
+    <textarea id="promptInput" rows="3" placeholder="Ask Gelo anything...">Hello Gelo</textarea>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="askBtn" onclick="askAi()">Ask Gelo</button>
+      <button class="btn btn-green" onclick="readAloud()">🗣️ Read</button>
+    </div>
+    <div id="aiOutput" class="ai-output" style="display: none;"></div>
+  </div>
+
+  <!-- MUSIC RECOGNITION VIEW -->
+  <div class="glass-card" id="viewMusic">
+    <div class="radar-wrapper">
+      <div class="pulse-container" id="pulseContainer">
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring" style="animation-delay: 0.5s;"></div>
+        <button class="radar-btn" id="radarBtn" onclick="startShazam()">⚡</button>
+      </div>
+      <div class="radar-status" id="radarStatus">Tap to Search</div>
+      <div class="upload-link" onclick="document.getElementById('filePicker').click()">or choose an audio file</div>
+      <input type="file" id="filePicker" accept="audio/*" onchange="uploadAudio(this.files[0])">
+      <div id="resultSlot" style="width: 100%;"></div>
+
+      <div class="history-section">
         <div class="history-header">
-          <span>Search History</span>
-          <span class="clear-btn" onclick="clearHistory()">Clear</span>
+          <span>Recent Discoveries</span>
+          <span style="cursor: pointer; text-decoration: underline;" onclick="clearHistory()">Clear</span>
         </div>
         <div id="historyList"></div>
       </div>
@@ -295,9 +417,16 @@ HTML_TEMPLATE = """
   </div>
 
   <script>
-    let audioCtx, analyser, sourceNode, animationId;
+    let audioCtx, analyser, sourceNode, animFrame;
 
     document.addEventListener("DOMContentLoaded", renderHistory);
+
+    function switchView(tab) {
+      document.getElementById('viewBrain').classList.toggle('active-view', tab === 'brain');
+      document.getElementById('viewMusic').classList.toggle('active-view', tab === 'music');
+      document.getElementById('tabBrain').classList.toggle('active', tab === 'brain');
+      document.getElementById('tabMusic').classList.toggle('active', tab === 'music');
+    }
 
     async function askAi() {
       const prompt = document.getElementById('promptInput').value.trim();
@@ -305,8 +434,8 @@ HTML_TEMPLATE = """
       const askBtn = document.getElementById('askBtn');
       if (!prompt) return;
 
-      output.innerText = "Thinking...";
-      output.className = "output";
+      output.style.display = "block";
+      output.innerHTML = "<em>Thinking...</em>";
       askBtn.disabled = true;
 
       try {
@@ -315,18 +444,14 @@ HTML_TEMPLATE = """
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ prompt })
         });
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-          const data = await response.json();
-          output.innerText = data.answer || data.error || "No response received.";
-          if (data.error) output.className = "output error";
+        const data = await response.json();
+        if (data.answer) {
+          output.innerHTML = marked.parse(data.answer);
         } else {
-          output.innerText = "Server is warming up. Please try again.";
-          output.className = "output error";
+          output.innerHTML = `<div class="error-box">${data.error || "No response received."}</div>`;
         }
       } catch (err) {
-        output.innerText = "Connection error: " + err.message;
-        output.className = "output error";
+        output.innerHTML = `<div class="error-box">Connection error: ${err.message}</div>`;
       } finally {
         askBtn.disabled = false;
       }
@@ -341,67 +466,63 @@ HTML_TEMPLATE = """
     }
 
     function getCover(track) {
-      if (track.spotify && track.spotify.album && track.spotify.album.images && track.spotify.album.images[0]) {
-        return track.spotify.album.images[0].url;
-      }
-      if (track.apple_music && track.apple_music.artwork) {
-        return track.apple_music.artwork.url.replace('{w}x{h}', '300x300');
-      }
+      if (track.spotify?.album?.images?.[0]) return track.spotify.album.images[0].url;
+      if (track.apple_music?.artwork) return track.apple_music.artwork.url.replace('{w}x{h}', '300x300');
       return 'https://via.placeholder.com/150/1e293b/38bdf8?text=Song';
     }
 
     function renderShazamResult(track) {
-      const container = document.getElementById('resultContainer');
+      const slot = document.getElementById('resultSlot');
       const coverUrl = getCover(track);
-      const spotifyLink = track.spotify ? track.spotify.external_urls.spotify : null;
-      const appleLink = track.apple_music ? track.apple_music.url : null;
+      const spotify = track.spotify?.external_urls?.spotify;
+      const apple = track.apple_music?.url;
 
-      container.innerHTML = `
-        <div class="track-card">
-          <img class="track-cover" src="${coverUrl}" alt="Album Art">
-          <div class="track-info">
-            <div class="track-title">${track.title}</div>
+      slot.innerHTML = `
+        <div class="track-result-card">
+          <img class="track-artwork" src="${coverUrl}" alt="Artwork">
+          <div class="track-meta">
+            <div class="track-name">${track.title}</div>
             <div class="track-artist">${track.artist}</div>
-            <div class="track-links">
-              ${spotifyLink ? `<a class="track-link-btn" href="${spotifyLink}" target="_blank">Spotify</a>` : ''}
-              ${appleLink ? `<a class="track-link-btn" href="${appleLink}" target="_blank">Apple Music</a>` : ''}
+            <div class="store-badges">
+              ${spotify ? `<a class="store-badge" href="${spotify}" target="_blank">Spotify</a>` : ''}
+              ${apple ? `<a class="store-badge" href="${apple}" target="_blank">Apple Music</a>` : ''}
             </div>
           </div>
         </div>
       `;
-      saveToHistory(track);
+      saveHistory(track);
     }
 
-    function saveToHistory(track) {
-      const history = JSON.parse(localStorage.getItem('gelo_music_history') || '[]');
-      const filtered = history.filter(item => item.title !== track.title);
+    function saveHistory(track) {
+      const history = JSON.parse(localStorage.getItem('gelo_history') || '[]');
+      const filtered = history.filter(i => i.title !== track.title);
       filtered.unshift({
         title: track.title,
         artist: track.artist,
         cover: getCover(track),
-        spotify: track.spotify ? track.spotify.external_urls.spotify : null,
-        apple: track.apple_music ? track.apple_music.url : null
+        spotify: track.spotify?.external_urls?.spotify,
+        apple: track.apple_music?.url
       });
-      localStorage.setItem('gelo_music_history', JSON.stringify(filtered.slice(0, 6)));
+      localStorage.setItem('gelo_history', JSON.stringify(filtered.slice(0, 5)));
       renderHistory();
     }
 
     function renderHistory() {
       const list = document.getElementById('historyList');
-      const history = JSON.parse(localStorage.getItem('gelo_music_history') || '[]');
-      if (history.length === 0) {
-        list.innerHTML = `<div style="font-size: 12px; color: #475569; padding: 4px 0;">No searches yet.</div>`;
+      const history = JSON.parse(localStorage.getItem('gelo_history') || '[]');
+      if (!history.length) {
+        list.innerHTML = `<div style="font-size: 12px; color: #475569; padding: 6px 0;">No discoveries yet.</div>`;
         return;
       }
       list.innerHTML = history.map(item => `
-        <div class="track-card history-card">
-          <img class="track-cover" style="width: 44px; height: 44px;" src="${item.cover}">
-          <div class="track-info">
-            <div class="track-title" style="font-size: 14px;">${item.title}</div>
+        <div class="track-result-card" style="margin-top: 8px; padding: 10px;">
+          <img class="track-artwork" style="width: 44px; height: 44px;" src="${item.cover}">
+          <div class="track-meta">
+            <div class="track-name" style="font-size: 13.5px;">${item.title}</div>
             <div class="track-artist" style="font-size: 12px;">${item.artist}</div>
-            <div class="track-links">
-              ${item.spotify ? `<a class="track-link-btn" style="font-size: 10px; padding: 2px 6px;" href="${item.spotify}" target="_blank">Spotify</a>` : ''}
-              ${item.apple ? `<a class="track-link-btn" style="font-size: 10px; padding: 2px 6px;" href="${item.apple}" target="_blank">Apple</a>` : ''}
+            <div class="store-badges">
+              ${item.spotify ? `<a class="store-badge" style="font-size: 10px; padding: 2px 7px;" href="${item.spotify}" target="_blank">Spotify</a>` : ''}
+              ${item.apple ? `<a class="store-badge" style="font-size: 10px; padding: 2px 7px;" href="${item.apple}" target="_blank">Apple</a>` : ''}
             </div>
           </div>
         </div>
@@ -409,7 +530,7 @@ HTML_TEMPLATE = """
     }
 
     function clearHistory() {
-      localStorage.removeItem('gelo_music_history');
+      localStorage.removeItem('gelo_history');
       renderHistory();
     }
 
@@ -422,35 +543,33 @@ HTML_TEMPLATE = """
 
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
-      const button = document.getElementById('shazamBtn');
+      const btn = document.getElementById('radarBtn');
 
       function draw() {
-        animationId = requestAnimationFrame(draw);
+        animFrame = requestAnimationFrame(draw);
         analyser.getByteFrequencyData(dataArray);
         let sum = 0;
         for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
-        let average = sum / bufferLength;
-        let scale = 1 + (average / 255) * 0.22;
-        button.style.transform = `scale(${scale})`;
+        let avg = sum / bufferLength;
+        btn.style.transform = `scale(${1 + (avg / 255) * 0.22})`;
       }
       draw();
     }
 
     function stopVisualizer() {
-      if (animationId) cancelAnimationFrame(animationId);
+      if (animFrame) cancelAnimationFrame(animFrame);
       if (sourceNode) sourceNode.disconnect();
       if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
-      const button = document.getElementById('shazamBtn');
-      if (button) button.style.transform = 'scale(1)';
+      const btn = document.getElementById('radarBtn');
+      if (btn) btn.style.transform = 'scale(1)';
     }
 
     async function uploadAudio(file) {
       if (!file) return;
-      const status = document.getElementById('shazamStatus');
-      const wrapper = document.getElementById('pulseWrapper');
+      const status = document.getElementById('radarStatus');
+      const container = document.getElementById('pulseContainer');
       status.innerText = "Searching database...";
-      status.className = "shazam-status";
-      wrapper.classList.remove('pulsing');
+      container.classList.remove('is-listening');
       stopVisualizer();
 
       const formData = new FormData();
@@ -463,20 +582,17 @@ HTML_TEMPLATE = """
           status.innerText = "Track Identified!";
           renderShazamResult(data.result);
         } else {
-          status.innerText = "No exact match. Try playing closer.";
-          status.className = "shazam-status error";
+          status.innerText = "No match found. Try again closer.";
         }
       } catch (e) {
         status.innerText = "Upload failed: " + e.message;
-        status.className = "shazam-status error";
       }
     }
 
     async function startShazam() {
-      const status = document.getElementById('shazamStatus');
-      const wrapper = document.getElementById('pulseWrapper');
-      const resContainer = document.getElementById('resultContainer');
-      resContainer.innerHTML = "";
+      const status = document.getElementById('radarStatus');
+      const container = document.getElementById('pulseContainer');
+      document.getElementById('resultSlot').innerHTML = "";
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         document.getElementById('filePicker').click();
@@ -488,9 +604,7 @@ HTML_TEMPLATE = """
         startVisualizer(stream);
 
         let mimeType = 'audio/webm';
-        if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          mimeType = 'audio/mp4';
-        }
+        if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
 
         const mediaRecorder = new MediaRecorder(stream);
         const audioChunks = [];
@@ -505,7 +619,7 @@ HTML_TEMPLATE = """
         };
 
         mediaRecorder.start(250);
-        wrapper.classList.add('pulsing');
+        container.classList.add('is-listening');
 
         let secondsLeft = 7;
         status.innerText = `Listening... (${secondsLeft}s)`;
@@ -520,7 +634,7 @@ HTML_TEMPLATE = """
           }
         }, 1000);
       } catch (err) {
-        wrapper.classList.remove('pulsing');
+        container.classList.remove('is-listening');
         stopVisualizer();
         document.getElementById('filePicker').click();
       }
@@ -561,7 +675,7 @@ def ask():
         except Exception:
             continue
 
-    return jsonify({"error": "Gemini servers are busy. Please tap Ask Gelo again in a moment."}), 503
+    return jsonify({"error": "Gemini servers are busy. Please try again."}), 503
 
 @app.route("/identify", methods=["POST"])
 def identify():
