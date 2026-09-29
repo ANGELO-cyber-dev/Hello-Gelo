@@ -401,12 +401,81 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
           <span style="cursor: pointer; text-decoration: underline;" onclick="clearHistory()">Clear</span>
         </div>
         <div id="historyList"></div>
+            </div>
+        </div>
+
+        <!-- BLACK HOLE DOWNLOADER CARD -->
+        <div style="margin-top:20px; background:#12151c; border:1px solid #232733; border-radius:16px; padding:18px; display:flex; flex-direction:column; align-items:center; box-shadow:0 8px 24px rgba(0,0,0,0.4);">
+            <div style="display:flex; justify-content:space-between; width:100%; align-items:center; margin-bottom:14px;">
+                <span style="font-size:11px; font-weight:700; color:#8b949e; letter-spacing:1px; text-transform:uppercase;">🕳️ BLACK HOLE DOWNLOADER</span>
+                <span id="bhStatusText" style="font-size:11px; color:#58a6ff;">Ready</span>
+            </div>
+
+            <div onclick="triggerInlineDownload()" style="width:72px; height:72px; border-radius:50%; background:radial-gradient(circle at 35% 35%, #2a2e3d 0%, #000 75%); border:2px solid rgba(255,255,255,0.7); box-shadow:0 0 25px rgba(56,139,253,0.35); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.3s; margin-bottom:14px;" id="bhCenterPulse">
+                <span style="font-size:20px;">⬇️</span>
+            </div>
+
+            <p style="font-size:11px; color:#7d8590; margin:0 0 12px 0; text-align:center;">Paste any TikTok, Instagram, Twitter, or YouTube link</p>
+
+            <div style="display:flex; width:100%; gap:8px;">
+                <input type="text" id="bhInlineUrl" placeholder="Paste link here..." style="flex:1; background:#090d16; border:1px solid #30363d; color:#fff; border-radius:10px; padding:10px 12px; font-size:12px; outline:none;">
+                <select id="bhFormatSelect" style="background:#161b22; color:#e6edf3; border:1px solid #30363d; border-radius:10px; padding:0 6px; font-size:11px; outline:none;">
+                    <option value="mp4_best">MP4 (Best)</option>
+                    <option value="mp4_720">MP4 (720p)</option>
+                    <option value="mp3">Audio (MP3)</option>
+                </select>
+                <button onclick="triggerInlineDownload()" style="background:#238636; border:none; color:#fff; padding:10px 14px; border-radius:10px; font-size:12px; cursor:pointer; font-weight:600;">Fetch</button>
+            </div>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
-    let chatHistory = [];
+    
+async function triggerInlineDownload() {
+    const input = document.getElementById("bhInlineUrl");
+    const status = document.getElementById("bhStatusText");
+    const pulse = document.getElementById("bhCenterPulse");
+    let url = input ? input.value.trim() : "";
+
+    if (!url && navigator.clipboard) {
+        try {
+            const clip = await navigator.clipboard.readText();
+            if (clip && clip.startsWith("http")) {
+                url = clip;
+                input.value = clip;
+            }
+        } catch(e) {}
+    }
+
+    if (!url) {
+        if(status) { status.innerText = "Paste URL first"; status.style.color = "#f85149"; }
+        return;
+    }
+
+    if(status) { status.innerText = "Extracting..."; status.style.color = "#388bfd"; }
+    if(pulse) { pulse.style.boxShadow = "0 0 35px rgba(63, 185, 80, 0.6)"; }
+
+    const formatSelect = document.getElementById("bhFormatSelect");
+    const formatVal = formatSelect ? formatSelect.value : "mp4_best";
+    const [fmt, qual] = formatVal === "mp3" ? ["mp3", "best"] : ["mp4", formatVal === "mp4_720" ? "720" : "best"];
+    const dlUrl = `/api/blackhole/stream?url=${encodeURIComponent(url)}&format=${fmt}&quality=${qual}`;
+
+    const a = document.createElement("a");
+    a.href = dlUrl;
+    a.setAttribute("download", "media");
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    setTimeout(() => {
+        if(status) { status.innerText = "Download started!"; status.style.color = "#3fb950"; }
+        if(pulse) { pulse.style.boxShadow = "0 0 25px rgba(56,139,253,0.35)"; }
+    }, 2500);
+}
+
+let chatHistory = [];
     let attachedImageBase64 = null;
     let recognition = null;
     let isRecording = false;
