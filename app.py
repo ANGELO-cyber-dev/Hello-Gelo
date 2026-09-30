@@ -407,7 +407,7 @@ MAIN_TEMPLATE = """<!DOCTYPE html>
         <!-- BLACK HOLE DOWNLOADER CARD -->
         <div style="margin-top:20px; background:#12151c; border:1px solid #232733; border-radius:16px; padding:18px; display:flex; flex-direction:column; align-items:center; box-shadow:0 8px 24px rgba(0,0,0,0.4);">
             <div style="display:flex; justify-content:space-between; width:100%; align-items:center; margin-bottom:14px;">
-                <span style="font-size:11px; font-weight:700; color:#8b949e; letter-spacing:1px; text-transform:uppercase;">🕳️ BLACK HOLE DOWNLOADER</span>
+                <span style="font-size:11px; font-weight:700; color:#8b949e; letter-spacing:1px; text-transform:uppercase;">📥 UNIVERSAL DOWNLOADER</span>
                 <span id="bhStatusText" style="font-size:11px; color:#58a6ff;">Ready</span>
             </div>
 
