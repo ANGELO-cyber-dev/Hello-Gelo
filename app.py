@@ -1007,8 +1007,15 @@ def blackhole_stream():
                 'User-Agent': 'Mozilla/5.0 (Android; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0'
             }
         }
+        # Normalize x.com links for extractor stability
+        target_url = url.replace("x.com/", "twitter.com/") if "x.com" in url else url
+
+        # For Twitter/X, prioritize direct progressive MP4 formats over m3u8 playlists
+        if "twitter.com" in target_url:
+            ydl_opts["format"] = "best[protocol=https][ext=mp4]/best[ext=mp4]/best"
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+            info = ydl.extract_info(target_url, download=False)
             stream_url = info.get('url') or (info.get('entries', [{}])[0].get('url') if 'entries' in info else None)
             clean_title = "".join([c for c in info.get('title', 'video') if c.isalnum() or c in (' ', '_', '-')]).strip()
 
