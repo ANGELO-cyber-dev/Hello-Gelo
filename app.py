@@ -984,13 +984,13 @@ def blackhole_stream():
         from flask import Response, stream_with_context
 
         if format_type == "mp3":
-            fmt = "bestaudio/best"
+            fmt = "bestaudio[ext=m4a]/bestaudio/best"
             ext = "mp3"
         elif quality == "720":
-            fmt = "best[height<=720][ext=mp4]/best[ext=mp4]/best"
+            fmt = "best[height<=720][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]/best"
             ext = "mp4"
         else:
-            fmt = "best[ext=mp4]/best"
+            fmt = "best[vcodec!=none][acodec!=none]/best"
             ext = "mp4"
 
         ydl_opts = {
